@@ -1,10 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useEffect, useRef, useState, type ChangeEvent } from 'react';
 import type { SongConcept } from './types';
-import { Header, MoodSelector, ChordGrid, ScalePanel, LyricsSheet, TactileButton, LyricsControlPanel } from './components';
+import { Header, MoodSelector, ChordGrid, ScalePanel, LyricsSheet, TactileButton, LyricsControlPanel, LiveSessionOverlay, SessionVaultPanel } from './components';
 import { generateSongConcept } from './services';
-import { useAudioEngine } from './hooks';
-import { useLyricsControls } from './hooks';
-import { detectKey } from './utils';
+import { useAudioEngine, useLiveSession, useLyricsControls, useStorage } from './hooks';
+import { buildSessionSnapshot, detectKey, parseSessionSnapshot, serializeSessionSnapshot } from './utils';
 
 const MOOD_DATA: Record<string, { chords: string[]; scale: string; lyrics: string; continuation: string }> = {
   'Jazzy Melancólico': {
@@ -75,6 +74,7 @@ function App() {
   const [isPracticeMode, setIsPracticeMode] = useState(false);
   const [bpm, setBpm] = useState(90);
   const [isLedOn, setIsLedOn] = useState(false);
+  const sessionFileInputRef = useRef<HTMLInputElement>(null);
 
   const triggerLedPulse = () => {
     setIsLedOn(true);
@@ -98,6 +98,12 @@ function App() {
     bpm,
     mood: concept.mood,
   });
+  const liveSession = useLiveSession({
+    chords: concept.chords,
+    lyrics: concept.lyrics,
+    bpm,
+  });
+  const storage = useStorage();
 
   // Synchronized metronome logic
   useEffect(() => {
@@ -186,6 +192,127 @@ function App() {
         hasContinued: true
       }));
     }
+  };
+
+  const handleExportSession = () => {
+    const snapshot = buildSessionSnapshot({
+      title: `${concept.mood} Session`,
+      mood: concept.mood,
+      bpm,
+      keyRoot: detected.root,
+      mode: detected.mode,
+      chords: concept.chords,
+      capo: transposeSteps,
+      chordProContent: concept.lyrics,
+      language: lyricsControls.language,
+      rhymeScheme: lyricsControls.rhymeScheme,
+      transposition: transposeSteps,
+      autoScrollSpeed: isPracticeMode ? 1 : 0,
+    });
+
+    const json = serializeSessionSnapshot(snapshot);
+    const blob = new Blob([json], { type: 'application/json;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = `${snapshot.metadata.title.replace(/\s+/g, '_').toLowerCase()}.acordify.json`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleImportSessionClick = () => {
+    sessionFileInputRef.current?.click();
+  };
+
+  const handleImportSessionFile = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+
+    if (!file) {
+      return;
+    }
+
+    const raw = await file.text();
+    const snapshot = parseSessionSnapshot(raw);
+
+    if (isPlaying) {
+      stopPlayback();
+    }
+
+    if (liveSession.isLiveSessionActive) {
+      liveSession.disableLiveSession({ stopTransport: true });
+    }
+
+    setIsPracticeMode(false);
+    setTransposeSteps(snapshot.player.transposition);
+    setBpm(snapshot.player.bpm);
+    setConcept({
+      mood: snapshot.metadata.mood,
+      chords: snapshot.music.chords,
+      scale: `${snapshot.music.keyRoot} ${snapshot.music.mode === 'major' ? 'Mayor' : 'Menor'}`,
+      lyrics: snapshot.lyrics.chordProContent,
+      hasContinued: true,
+    });
+  };
+
+  const handleSaveCurrentSession = async () => {
+    await storage.saveSession(
+      buildSessionSnapshot({
+        title: `${concept.mood} Session`,
+        mood: concept.mood,
+        bpm,
+        keyRoot: detected.root,
+        mode: detected.mode,
+        chords: concept.chords,
+        capo: transposeSteps,
+        chordProContent: concept.lyrics,
+        language: lyricsControls.language,
+        rhymeScheme: lyricsControls.rhymeScheme,
+        transposition: transposeSteps,
+        autoScrollSpeed: isPracticeMode ? 1 : 0,
+      }),
+    );
+  };
+
+  const handleLoadStoredSession = async (id: string) => {
+    const snapshot = await storage.loadSession(id);
+
+    if (isPlaying) {
+      stopPlayback();
+    }
+
+    if (liveSession.isLiveSessionActive) {
+      liveSession.disableLiveSession({ stopTransport: true });
+    }
+
+    setIsPracticeMode(false);
+    setTransposeSteps(snapshot.player.transposition);
+    setBpm(snapshot.player.bpm);
+    setConcept({
+      mood: snapshot.metadata.mood,
+      chords: snapshot.music.chords,
+      scale: `${snapshot.music.keyRoot} ${snapshot.music.mode === 'major' ? 'Mayor' : 'Menor'}`,
+      lyrics: snapshot.lyrics.chordProContent,
+      hasContinued: true,
+    });
+  };
+
+  const handleDeleteStoredSession = async (id: string) => {
+    await storage.deleteSession(id);
+  };
+
+  const handleExportBackup = async () => {
+    const backup = await storage.exportBackup();
+    const url = URL.createObjectURL(backup.blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = backup.filename;
+    anchor.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleImportBackup = async (file: File) => {
+    await storage.importBackup(file);
   };
 
     const isLeftVisible = isModuleVisible('chord_monitor') || isModuleVisible('scale_visualizer');
@@ -284,6 +411,20 @@ function App() {
                     }}
                     onBypass={() => handleBypass('control_panel')}
                   />
+
+                  <div className="mt-4">
+                    <SessionVaultPanel
+                      sessions={storage.sessions}
+                      isLoading={storage.isLoading}
+                      error={storage.error}
+                      onSaveCurrent={handleSaveCurrentSession}
+                      onLoadSession={handleLoadStoredSession}
+                      onDeleteSession={handleDeleteStoredSession}
+                      onExportBackup={handleExportBackup}
+                      onImportBackup={handleImportBackup}
+                      onRefresh={storage.refreshSessions}
+                    />
+                  </div>
                 </div>
               </div>
             )}
@@ -418,6 +559,8 @@ function App() {
                       lyrics={concept.lyrics} 
                       transposeSteps={transposeSteps} 
                       isPracticeMode={isPracticeMode}
+                        isLiveSessionActive={liveSession.isLiveSessionActive}
+                        activeLineIndex={liveSession.activeLineIndex}
                       onBypass={() => handleBypass('lyrics_sheet')}
                     />
                   </div>
@@ -452,6 +595,30 @@ function App() {
                       >
                         {concept.hasContinued ? 'LETRA COMPLETADA' : 'CONTINUAR LETRA'}
                       </TactileButton>
+
+                      <TactileButton
+                        variant={liveSession.isLiveSessionActive ? 'green' : 'zinc'}
+                        onClick={liveSession.toggleLiveSession}
+                        className="font-bold min-w-27.5"
+                      >
+                        {liveSession.isLiveSessionActive ? 'STOP LIVE' : 'LIVE SESSION'}
+                      </TactileButton>
+
+                      <TactileButton
+                        variant="zinc"
+                        onClick={handleExportSession}
+                        className="font-bold min-w-27.5"
+                      >
+                        EXPORT JSON
+                      </TactileButton>
+
+                      <TactileButton
+                        variant="zinc"
+                        onClick={handleImportSessionClick}
+                        className="font-bold min-w-27.5"
+                      >
+                        IMPORT JSON
+                      </TactileButton>
                     </div>
                   </div>
                 </div>
@@ -466,6 +633,24 @@ function App() {
             </div>
           )}
         </main>
+
+        <LiveSessionOverlay
+          isActive={liveSession.isLiveSessionActive}
+          activeChord={concept.chords[liveSession.activeChordIndex] ?? concept.chords[0] ?? ''}
+          activeChordIndex={liveSession.activeChordIndex}
+          currentMeasure={liveSession.currentMeasure}
+          chordDurationsBars={liveSession.chordDurationsBars}
+          onToggle={liveSession.toggleLiveSession}
+          onSetChordDurationBars={liveSession.setChordDurationBars}
+        />
+
+        <input
+          ref={sessionFileInputRef}
+          type="file"
+          accept=".acordify.json,application/json"
+          className="hidden"
+          onChange={handleImportSessionFile}
+        />
       </div>
     );
 }

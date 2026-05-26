@@ -11,6 +11,11 @@ export {
   validateProgression,
   detectKey,
 } from './harmonicValidator';
+export {
+  buildSessionSnapshot,
+  parseSessionSnapshot,
+  serializeSessionSnapshot,
+} from './sessionExporter';
 export type {
   NoteName,
   ChordQuality,
@@ -19,3 +24,10 @@ export type {
   ValidationResult,
   ProgressionValidationResult,
 } from './harmonicValidator';
+export type {
+  SessionSnapshot,
+  SessionMetadata,
+  SessionMusic,
+  SessionLyrics,
+  SessionPlayer,
+} from './sessionExporter';

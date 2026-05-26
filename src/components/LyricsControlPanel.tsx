@@ -97,6 +97,8 @@ export const LyricsControlPanel: React.FC<LyricsControlPanelProps> = ({
 }) => {
   const emotionalLabel = emotionalMood <= 50 ? 'MELANCÓLICO' : 'ESPERANZADOR';
   const emotionalDotLeft = emotionalMood <= 50;
+  const conceptWords = thematicConcept.trim().split(/\s+/).filter(Boolean);
+  const isWeakConcept = thematicConcept.trim().length > 0 && (thematicConcept.trim().length < 8 || conceptWords.length < 2);
 
   return (
     <div className="border border-zinc-700 bg-zinc-800 p-4 rounded-sm shadow-md select-none flex flex-col gap-4">
@@ -231,6 +233,11 @@ export const LyricsControlPanel: React.FC<LyricsControlPanelProps> = ({
             {thematicConcept.length}/60
           </span>
         </div>
+        {isWeakConcept && (
+          <p className="text-[10px] font-mono leading-relaxed text-amber-400 uppercase tracking-[0.14em]">
+            SUGERENCIA // Usa un concepto más concreto para que la letra siga ese tema con más precisión.
+          </p>
+        )}
       </div>
 
       <div className="space-y-2">

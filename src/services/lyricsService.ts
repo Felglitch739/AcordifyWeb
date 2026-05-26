@@ -62,6 +62,14 @@ Thematic concept: {{THEMATIC_CONCEPT}}
 Language: {{LANGUAGE}}
 Lines to generate: {{LINES_TO_GENERATE}}
 
+=== THEMATIC ANCHOR RULES ===
+The thematic concept is the primary topic of the stanza.
+- Base the semantic field, imagery, and verbs on the thematic concept.
+- Every line must reinforce the theme directly or through closely related imagery.
+- Avoid generic filler lines that could belong to any song.
+- If the concept is specific, prefer concrete nouns and scene details over abstract phrasing.
+- Do not drift into unrelated moods or topics even if the tone is emotional.
+
 === TEMPO HINT ===
 {{BPM_HINT}}
 

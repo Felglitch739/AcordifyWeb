@@ -5,6 +5,8 @@ interface LyricsSheetProps {
   lyrics: string;
   transposeSteps?: number;
   isPracticeMode?: boolean;
+  isLiveSessionActive?: boolean;
+  activeLineIndex?: number;
   onBypass?: () => void;
 }
 
@@ -62,9 +64,28 @@ function parseChordProLine(line: string): LyricSegment[] {
   return segments;
 }
 
-export const LyricsSheet: React.FC<LyricsSheetProps> = ({ lyrics, transposeSteps = 0, isPracticeMode = false, onBypass }) => {
+export const LyricsSheet: React.FC<LyricsSheetProps> = ({
+  lyrics,
+  transposeSteps = 0,
+  isPracticeMode = false,
+  isLiveSessionActive = false,
+  activeLineIndex,
+  onBypass,
+}) => {
   const lines = lyrics.split('\n');
   const scrollContainerRef = React.useRef<HTMLDivElement>(null);
+  const lineRefs = React.useRef<Array<HTMLDivElement | null>>([]);
+
+  React.useEffect(() => {
+    if (!isLiveSessionActive || activeLineIndex === undefined) {
+      return;
+    }
+
+    const activeLineElement = lineRefs.current[activeLineIndex];
+    if (activeLineElement) {
+      activeLineElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }, [activeLineIndex, isLiveSessionActive]);
 
   React.useEffect(() => {
     if (!isPracticeMode) return;
@@ -120,11 +141,17 @@ export const LyricsSheet: React.FC<LyricsSheetProps> = ({ lyrics, transposeSteps
         <div className="relative z-10 font-mono text-xs md:text-sm text-stone-200 flex flex-col space-y-6 leading-loose tracking-wide select-text border-l-2 border-zinc-800/50 pl-4 ml-2">
           {lines.map((line, lineIdx) => {
             const segments = parseChordProLine(line);
+            const isActiveLine = isLiveSessionActive && activeLineIndex === lineIdx;
 
             return (
               <div
                 key={lineIdx}
-                className="flex flex-wrap items-end min-h-[3rem] border-b border-zinc-900/50 pb-1"
+                ref={(element) => {
+                  lineRefs.current[lineIdx] = element;
+                }}
+                className={`flex flex-wrap items-end min-h-[3rem] border-b pb-1 transition-colors ${
+                  isActiveLine ? 'border-orange-500/60 bg-orange-500/5' : 'border-zinc-900/50'
+                }`}
               >
                 {segments.map((segment, segIdx) => {
                   const hasChord = !!segment.chord;

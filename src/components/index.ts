@@ -6,6 +6,8 @@ export { ScalePanel } from './ScalePanel';
 export { LyricsSheet } from './LyricsSheet';
 export { LyricsControlPanel } from './LyricsControlPanel';
 export { StrumsVisualizer } from './StrumsVisualizer';
+export { LiveSessionOverlay } from './LiveSessionOverlay';
+export { SessionVaultPanel } from './SessionVaultPanel';
 export { Header } from './layout/Header';
 export { Fretboard } from './Fretboard';
 export { ScaleVisualizer } from './ScaleVisualizer';

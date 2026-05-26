@@ -25,6 +25,20 @@ export type {
 	CompleteVerseResult,
 } from './completeVerse';
 export {
+	saveSession,
+	upsertSession,
+	listSessions,
+	loadSession,
+	deleteSession,
+	exportSessionsBackup,
+	importSessionsBackup,
+} from './storageService';
+export type {
+	SavedSessionRecord,
+	SavedSessionSummary,
+	BackupExportResult,
+} from './storageService';
+export {
 	buildLyricsPrompt,
 	parseLyricsResponse,
 	toChordProFormat as toLyricsChordProFormat,
