@@ -72,7 +72,7 @@ El resultado se inyecta directo al ChordPro Notebook en formato ChordPro.
 
 ---
 
-### 04 — Parámetros Avanzados de Letras 🔨 SIGUIENTE
+### 04 — Parámetros Avanzados de Letras 🔨 LISTO
 **Archivo:** `/docs/prompts/04_parametros_letras.txt`
 **Destino:** `/src/components/LyricsControlPanel.tsx` + `/src/services/lyricsService.ts`
 **Descripción:** Panel de controles avanzados para la generación de letras.
@@ -90,7 +90,7 @@ activo y la progresión de acordes.
 
 ---
 
-### 05 — Rasgueos Animados por Género 🔨
+### 05 — Rasgueos Animados por Género 🔨 LISTO
 **Archivo:** `/docs/prompts/05_rasgueos_animados.txt`
 **Destino:** `/src/components/StrumsVisualizer.tsx`
 **Descripción:** Visualizador de patrones de rasgueo representados con

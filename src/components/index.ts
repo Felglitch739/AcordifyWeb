@@ -5,6 +5,7 @@ export { ChordGrid } from './ChordGrid';
 export { ScalePanel } from './ScalePanel';
 export { LyricsSheet } from './LyricsSheet';
 export { LyricsControlPanel } from './LyricsControlPanel';
+export { StrumsVisualizer } from './StrumsVisualizer';
 export { Header } from './layout/Header';
 export { Fretboard } from './Fretboard';
 export { ScaleVisualizer } from './ScaleVisualizer';
