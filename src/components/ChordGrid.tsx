@@ -41,7 +41,7 @@ export const ChordGrid: React.FC<ChordGridProps> = ({ chords, transposeSteps = 0
           return (
             <div 
               key={`${chordName}-${index}`} 
-              className="bg-zinc-950 border-[3px] border-zinc-800 p-6 h-[420px] flex flex-col justify-between rounded-sm relative shadow-[4px_4px_0px_0px_rgba(0,0,0,0.5)] transition-transform active:scale-[0.99]"
+              className="bg-zinc-950 border-[3px] border-zinc-800 p-6 h-105 flex flex-col justify-between rounded-sm relative shadow-[4px_4px_0px_0px_rgba(0,0,0,0.5)] transition-transform active:scale-[0.99]"
             >
               {/* Badge de Estado de Hardware */}
               <div className="flex items-center justify-between border-b border-zinc-900 pb-2">

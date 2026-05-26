@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { buildLyricsPrompt, parseLyricsResponse, toChordProFormat, type LyricsParams, type LyricsResult } from '../services';
+import { buildLyricsPrompt, parseLyricsResponse, type LyricsParams, type LyricsResult } from '../services';
 
 export interface UseLyricsControlsOptions {
   activeChords: string[];
@@ -69,37 +69,17 @@ function extractAssistantContent(payload: unknown): string {
       if (isRecord(message) && typeof message.content === 'string') {
         return message.content;
       }
-
-      if (typeof firstChoice.text === 'string') {
-        return firstChoice.text;
-      }
-    }
-  }
-
-  const { candidates } = payload;
-  if (Array.isArray(candidates) && candidates.length > 0) {
-    const [firstCandidate] = candidates;
-    if (isRecord(firstCandidate)) {
-      const { content } = firstCandidate;
-      if (isRecord(content) && Array.isArray(content.parts)) {
-        const text = content.parts
-          .map((part: unknown) => {
-            if (isRecord(part) && typeof part.text === 'string') {
-              return part.text;
-            }
-
-            return '';
-          })
-          .join('');
-
-        if (text.trim()) {
-          return text;
-        }
-      }
     }
   }
 
   throw new Error('AI response does not contain assistant content.');
+}
+
+function cleanAssistantContent(text: string): string {
+  return text
+    .replace(/```json/g, '')
+    .replace(/```/g, '')
+    .trim();
 }
 
 export function useLyricsControls(options: UseLyricsControlsOptions): UseLyricsControlsResult {
@@ -192,8 +172,10 @@ export function useLyricsControls(options: UseLyricsControlsOptions): UseLyricsC
       }
 
       const payload: unknown = await response.json();
+      console.log('raw response:', payload);
       const content = extractAssistantContent(payload);
-      const parsed = parseLyricsResponse(content, lyricsParams);
+      const clean = cleanAssistantContent(content);
+      const parsed = parseLyricsResponse(clean, lyricsParams);
 
       if (mountedRef.current) {
         setResult(parsed);
@@ -201,6 +183,7 @@ export function useLyricsControls(options: UseLyricsControlsOptions): UseLyricsC
 
       return parsed;
     } catch (caughtError) {
+      console.error(caughtError);
       const message = caughtError instanceof Error ? caughtError.message : 'Unknown lyrics generation error.';
 
       if (mountedRef.current) {
@@ -209,9 +192,7 @@ export function useLyricsControls(options: UseLyricsControlsOptions): UseLyricsC
 
       throw caughtError;
     } finally {
-      if (mountedRef.current) {
-        setIsGenerating(false);
-      }
+      setIsGenerating(false);
     }
   }, [lyricsParams]);
 

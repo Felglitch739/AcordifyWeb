@@ -76,11 +76,11 @@ function stripMarkdownFences(raw: string): string {
   const trimmed = raw.trim();
 
   if (trimmed.startsWith('```json')) {
-    return trimmed.replace(/^```json\s*/, '').replace(/```\s*$/, '').trim();
+    return trimmed.replace(/^```json\s*/, '').replace(/\s*```\s*$/, '').trim();
   }
 
   if (trimmed.startsWith('```')) {
-    return trimmed.replace(/^```\s*/, '').replace(/```\s*$/, '').trim();
+    return trimmed.replace(/^```\s*/, '').replace(/\s*```\s*$/, '').trim();
   }
 
   return trimmed;

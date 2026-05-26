@@ -5,7 +5,8 @@ let audioCtx: AudioContext | null = null;
 
 function getAudioContext() {
   if (!audioCtx) {
-    const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+    const webkitWindow = window as Window & { webkitAudioContext?: typeof AudioContext };
+    const AudioContextClass = window.AudioContext || webkitWindow.webkitAudioContext;
     if (AudioContextClass) {
       audioCtx = new AudioContextClass();
     }
@@ -55,7 +56,7 @@ export function playClickSound(type: 'down' | 'up' = 'down') {
       osc.start(now);
       osc.stop(now + 0.03);
     }
-  } catch (e) {
+  } catch {
     // Silently fail if audio API is blocked
   }
 }

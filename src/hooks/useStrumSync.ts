@@ -10,7 +10,6 @@ interface UseStrumSyncOptions {
 
 export function useStrumSync(opts: UseStrumSyncOptions) {
   const { initialMood = 'Pop Acústico Relajado', bpm } = opts;
-  const all = getAllPatterns();
   const initialPattern = getPatternByMood(initialMood);
 
   const [isPlaying, setIsPlaying] = useState(false);
@@ -35,7 +34,7 @@ export function useStrumSync(opts: UseStrumSyncOptions) {
     scheduledIdsRef.current.forEach((id) => {
       try {
         Tone.Transport.clear(id);
-      } catch (e) {
+      } catch {
         // ignore
       }
     });
@@ -64,7 +63,7 @@ export function useStrumSync(opts: UseStrumSyncOptions) {
     });
   }, [pattern, clearScheduled]);
 
-  const onBar = useCallback((time) => {
+  const onBar = useCallback((time: number) => {
     // Update bar counter (use Tone.Draw to sync DOM updates)
     Tone.Draw.schedule(() => {
       setCurrentBar((b) => b + 1);
@@ -107,7 +106,9 @@ export function useStrumSync(opts: UseStrumSyncOptions) {
     if (barScheduleIdRef.current !== null) {
       try {
         Tone.Transport.clear(barScheduleIdRef.current);
-      } catch (e) {}
+      } catch {
+        // ignore
+      }
       barScheduleIdRef.current = null;
     }
     clearScheduled();
@@ -151,7 +152,9 @@ export function useStrumSync(opts: UseStrumSyncOptions) {
       if (barScheduleIdRef.current !== null) {
         try {
           Tone.Transport.clear(barScheduleIdRef.current);
-        } catch (e) {}
+        } catch {
+          // ignore
+        }
         barScheduleIdRef.current = null;
       }
       clearScheduled();

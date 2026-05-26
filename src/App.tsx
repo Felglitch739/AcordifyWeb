@@ -104,13 +104,9 @@ function App() {
     // If loop player is active, Tone.js drives the LED pulse via callback.
     // If stopped but practice mode is active, fallback to JS timer.
     if (!isPracticeMode || isPlaying) {
-      if (!isPracticeMode) {
-        setIsLedOn(false);
-      }
       return;
     }
 
-    triggerLedPulse();
     const intervalId = setInterval(triggerLedPulse, (60 / bpm) * 1000);
 
     return () => {
@@ -241,12 +237,12 @@ function App() {
         </div>
   
         {/* Main Screen Layout */}
-        <main className="max-w-7xl w-full mx-auto p-4 md:p-6 lg:p-8 flex-grow flex flex-col space-y-8">
+        <main className="max-w-7xl w-full mx-auto p-4 md:p-6 lg:p-8 grow flex flex-col space-y-8">
           
           {/* Top Control Panel: Mood, Smart Transposer & Practice Engine */}
           <div className="flex flex-wrap gap-6 items-stretch">
             {isModuleVisible('control_panel') && (
-              <div className="flex-grow min-w-[300px] md:flex-[2_2_0%]">
+              <div className="grow min-w-75 md:flex-[2_2_0%]">
                 <MoodSelector 
                   value={concept.mood} 
                   onChange={handleMoodChange} 
@@ -292,7 +288,7 @@ function App() {
             )}
             
             {isModuleVisible('transposer') && (
-              <div className="flex-grow min-w-[200px] md:flex-1 border border-zinc-700 bg-zinc-800 p-4 rounded-sm flex flex-col space-y-3 shadow-md select-none justify-between">
+              <div className="grow min-w-50 md:flex-1 border border-zinc-700 bg-zinc-800 p-4 rounded-sm flex flex-col space-y-3 shadow-md select-none justify-between">
                 <div className="flex items-center justify-between border-b border-zinc-700 pb-2">
                   <label className="text-2xs font-mono font-bold tracking-wider text-zinc-400 uppercase">
                     [PITCH] // SMART TRANSPOSER
@@ -305,14 +301,14 @@ function App() {
                     [ BYPASS ]
                   </button>
                 </div>
-                <div className="flex-grow flex items-center justify-center space-x-3">
-                  <TactileButton variant="zinc" onClick={() => setTransposeSteps(s => s - 1)} className="!px-3 !py-2 !text-2xs">
+                <div className="grow flex items-center justify-center space-x-3">
+                  <TactileButton variant="zinc" onClick={() => setTransposeSteps(s => s - 1)} className="px-3! py-2! text-2xs!">
                     -1 ST
                   </TactileButton>
                   <div className="bg-zinc-950 px-3 py-2 border border-zinc-800 rounded-sm font-mono text-xs text-amber-500 font-bold uppercase w-24 text-center shadow-inner">
                     CAPO: {transposeSteps > 0 ? `+${transposeSteps}` : transposeSteps}
                   </div>
-                  <TactileButton variant="zinc" onClick={() => setTransposeSteps(s => s + 1)} className="!px-3 !py-2 !text-2xs">
+                  <TactileButton variant="zinc" onClick={() => setTransposeSteps(s => s + 1)} className="px-3! py-2! text-2xs!">
                     +1 ST
                   </TactileButton>
                 </div>
@@ -320,7 +316,7 @@ function App() {
             )}
   
             {/* Practice Engine Module - Always Visible */}
-            <div className="flex-grow min-w-[200px] md:flex-1 border border-zinc-700 bg-zinc-800 p-4 rounded-sm flex flex-col space-y-3 shadow-md select-none justify-between">
+            <div className="grow min-w-50 md:flex-1 border border-zinc-700 bg-zinc-800 p-4 rounded-sm flex flex-col space-y-3 shadow-md select-none justify-between">
               <div className="flex items-center justify-between border-b border-zinc-700 pb-2">
                 <label className="text-2xs font-mono font-bold tracking-wider text-zinc-400 uppercase">
                   [SESSION] // PRACTICE ENGINE
@@ -336,12 +332,12 @@ function App() {
                   ></div>
                 </div>
               </div>
-              <div className="flex flex-col space-y-2 flex-grow justify-center">
+              <div className="flex flex-col space-y-2 grow justify-center">
                 <TactileButton 
                   variant={isPracticeMode ? 'orange' : 'zinc'} 
                   onClick={handlePracticeModeToggle}
                   className={`py-1.5 text-xs font-bold font-mono tracking-widest ${
-                    isPracticeMode ? '!bg-orange-500 !text-zinc-950 hover:!bg-orange-400' : ''
+                    isPracticeMode ? 'bg-orange-500! text-zinc-950! hover:bg-orange-400!' : ''
                   }`}
                 >
                   {isPracticeMode ? '[ ACTIVE ]' : '[ PRACTICE MODE ]'}
@@ -350,18 +346,18 @@ function App() {
                   <TactileButton 
                     variant="zinc" 
                     onClick={() => setBpm(b => Math.max(40, b - 5))} 
-                    className="!px-2 !py-1 !text-2xs font-mono"
+                    className="px-2! py-1! text-2xs! font-mono"
                   >
                     -5
                   </TactileButton>
-                  <div className="flex-grow bg-zinc-950 px-2 py-1 border border-zinc-800 rounded-sm font-mono text-xs text-amber-500 font-bold uppercase text-center shadow-inner flex items-center justify-center space-x-1">
+                  <div className="grow bg-zinc-950 px-2 py-1 border border-zinc-800 rounded-sm font-mono text-xs text-amber-500 font-bold uppercase text-center shadow-inner flex items-center justify-center space-x-1">
                     <span>{bpm}</span>
                     <span className="text-[9px] text-zinc-600">BPM</span>
                   </div>
                   <TactileButton 
                     variant="zinc" 
                     onClick={() => setBpm(b => Math.min(240, b + 5))} 
-                    className="!px-2 !py-1 !text-2xs font-mono"
+                    className="px-2! py-1! text-2xs! font-mono"
                   >
                     +5
                   </TactileButton>
@@ -416,7 +412,7 @@ function App() {
               {isRightVisible && (
                 <div className="flex flex-col space-y-4 h-full justify-between">
                   {/* Sheet showing monospace typography */}
-                  <div className="flex-grow">
+                  <div className="grow">
                     <LyricsSheet 
                       lyrics={concept.lyrics} 
                       transposeSteps={transposeSteps} 
@@ -442,7 +438,7 @@ function App() {
                         variant={isPlaying ? 'red' : 'green'}
                         onClick={handlePlayLoopToggle}
                         disabled={isPlaybackDisabled}
-                        className="font-bold min-w-[110px]"
+                        className="font-bold min-w-27.5"
                       >
                         {isPlaying ? 'STOP LOOP' : 'PLAY LOOP'}
                       </TactileButton>

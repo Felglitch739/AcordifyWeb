@@ -11,8 +11,8 @@ export const Fretboard: React.FC<FretboardProps> = ({ frets, startFret = 1 }) =>
   const fretsY = [20, 45, 70, 95, 120];      // 5 fret lines (nut + 4 frets)
 
   return (
-    <div className="flex flex-col items-center select-none w-full max-w-[100px] mt-2">
-      <svg viewBox="0 0 100 130" className="w-full h-auto overflow-visible">
+    <div className="flex flex-col items-center select-none w-full max-w-35 mt-3">
+      <svg viewBox="0 0 120 160" className="w-full h-auto overflow-visible">
         
         {/* Frets (Horizontal Lines) */}
         {fretsY.map((y, i) => (
@@ -20,10 +20,10 @@ export const Fretboard: React.FC<FretboardProps> = ({ frets, startFret = 1 }) =>
             key={`fret-${i}`}
             x1="10"
             y1={y}
-            x2="90"
+            x2="110"
             y2={y}
             className={i === 0 ? "stroke-stone-300" : "stroke-zinc-800"}
-            strokeWidth={i === 0 ? 4 : 1.5}
+            strokeWidth={i === 0 ? 4.5 : 1.8}
             strokeLinecap="round"
           />
         ))}
@@ -35,9 +35,9 @@ export const Fretboard: React.FC<FretboardProps> = ({ frets, startFret = 1 }) =>
             <line
               key={`string-${i}`}
               x1={x}
-              y1="20"
+              y1="24"
               x2={x}
-              y2="120"
+              y2="144"
               className="stroke-zinc-600"
               strokeWidth={thicknesses[i]}
               strokeLinecap="square"
@@ -48,9 +48,9 @@ export const Fretboard: React.FC<FretboardProps> = ({ frets, startFret = 1 }) =>
         {/* Start Fret Label (for barre chords up the neck) */}
         {startFret > 1 && (
           <text
-            x="4"
-            y="36"
-            className="fill-zinc-600 font-mono text-[10px]"
+            x="6"
+            y="44"
+            className="fill-zinc-600 font-mono text-[12px]"
             textAnchor="end"
           >
             {startFret}
@@ -67,8 +67,8 @@ export const Fretboard: React.FC<FretboardProps> = ({ frets, startFret = 1 }) =>
               <text
                 key={`marker-${i}`}
                 x={x}
-                y="10"
-                className="fill-zinc-600 font-mono text-[10px] font-bold"
+                y="14"
+                className="fill-zinc-600 font-mono text-[12px] font-bold"
                 textAnchor="middle"
               >
                 ×
@@ -80,10 +80,10 @@ export const Fretboard: React.FC<FretboardProps> = ({ frets, startFret = 1 }) =>
               <circle
                 key={`marker-${i}`}
                 cx={x}
-                cy="7"
-                r="3"
+                cy="12"
+                r="4"
                 className="stroke-emerald-500 fill-transparent"
-                strokeWidth="1.5"
+                strokeWidth="1.6"
               />
             );
           } else if (fret > 0) {
@@ -102,9 +102,9 @@ export const Fretboard: React.FC<FretboardProps> = ({ frets, startFret = 1 }) =>
                   key={`marker-${i}`}
                   cx={x}
                   cy={cy}
-                  r="4.5"
-                  className="fill-[#d4d4d8] stroke-zinc-700" // Vintage cream hardware dot
-                  strokeWidth="0.5"
+                  r="5"
+                  className="fill-[#d4d4d8] stroke-zinc-700"
+                  strokeWidth="0.6"
                 />
               );
             }

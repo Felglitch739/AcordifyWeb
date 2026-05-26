@@ -60,10 +60,10 @@ Formato de Respuesta: Devuelve ÚNICAMENTE un objeto JSON plano, sin bloques de 
     let content = data.choices[0].message.content.trim();
 
     // Cleanup any accidental markdown blocks the AI might output despite instructions
-    if (content.startsWith('\`\`\`json')) {
-      content = content.replace(/^\`\`\`json/, '').replace(/\`\`\`$/, '').trim();
-    } else if (content.startsWith('\`\`\`')) {
-      content = content.replace(/^\`\`\`/, '').replace(/\`\`\`$/, '').trim();
+    if (content.startsWith('```json')) {
+      content = content.replace(/^```json/, '').replace(/```$/, '').trim();
+    } else if (content.startsWith('```')) {
+      content = content.replace(/^```/, '').replace(/```$/, '').trim();
     }
 
     const parsed: SongConceptResponse = JSON.parse(content);

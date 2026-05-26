@@ -69,16 +69,14 @@ export const LyricsSheet: React.FC<LyricsSheetProps> = ({ lyrics, transposeSteps
   React.useEffect(() => {
     if (!isPracticeMode) return;
 
-    let intervalId: ReturnType<typeof setInterval>;
-    
-    // Smooth scrolling: increment scrollTop by 1 pixel every 40ms
-    intervalId = setInterval(() => {
+    const intervalId: ReturnType<typeof setInterval> = setInterval(() => {
       const container = scrollContainerRef.current;
       if (container) {
         container.scrollTop += 1;
       }
     }, 40);
 
+    // Smooth scrolling: increment scrollTop by 1 pixel every 40ms
     return () => {
       clearInterval(intervalId);
     };

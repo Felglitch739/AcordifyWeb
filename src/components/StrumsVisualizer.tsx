@@ -1,5 +1,5 @@
 import React from 'react';
-import type { StrumPattern, StrumState } from '../utils/strumPatterns';
+import type { StrumState } from '../utils/strumPatterns';
 
 interface Props {
   state: StrumState;

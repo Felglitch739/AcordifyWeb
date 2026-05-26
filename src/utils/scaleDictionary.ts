@@ -91,7 +91,7 @@ function buildScale(root: string, originalName: string, normalizedName: string):
     return { name: originalName, notes: [], root };
   }
 
-  let semitones: number[] = [];
+  let semitones: number[];
   
   // Detect pentatonic mode
   if (normalizedName.includes('pentatónica') || normalizedName.includes('pentatonica')) {
