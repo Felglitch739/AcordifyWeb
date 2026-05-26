@@ -37,6 +37,7 @@ function App() {
     lyrics: initialData.lyrics,
     hasContinued: false
   });
+  const [chordProContent, setChordProContent] = useState(initialData.lyrics);
 
   const [transposeSteps, setTransposeSteps] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
@@ -75,6 +76,35 @@ function App() {
   const [bpm, setBpm] = useState(90);
   const [isLedOn, setIsLedOn] = useState(false);
   const sessionFileInputRef = useRef<HTMLInputElement>(null);
+  const [panelCollapsed, setPanelCollapsed] = useState<Record<string, boolean>>(() => {
+    try {
+      const raw = window.localStorage.getItem('acordify_panels');
+      return raw ? JSON.parse(raw) as Record<string, boolean> : {};
+    } catch {
+      return {};
+    }
+  });
+
+  const syncNotebookContent = (nextContent: string) => {
+    setChordProContent(nextContent);
+    setConcept(prev => ({
+      ...prev,
+      lyrics: nextContent,
+    }));
+  };
+
+  const togglePanelCollapsed = (panelId: string) => {
+    setPanelCollapsed(prev => ({
+      ...prev,
+      [panelId]: !prev[panelId],
+    }));
+  };
+
+  const isPanelCollapsed = (panelId: string) => panelCollapsed[panelId] ?? false;
+
+  useEffect(() => {
+    window.localStorage.setItem('acordify_panels', JSON.stringify(panelCollapsed));
+  }, [panelCollapsed]);
 
   const triggerLedPulse = () => {
     setIsLedOn(true);
@@ -100,7 +130,7 @@ function App() {
   });
   const liveSession = useLiveSession({
     chords: concept.chords,
-    lyrics: concept.lyrics,
+    lyrics: chordProContent,
     bpm,
   });
   const storage = useStorage();
@@ -155,6 +185,7 @@ function App() {
       lyrics: '\n\n[LOAD]ESTABLECIENDO CONEXIÓN...\n[LOAD]PROCESANDO TIMBRE MENTAL...\n[LOAD]EXTRAYENDO ACORDES...\n[LOAD]ESPERE...',
       hasContinued: false
     });
+    setChordProContent('\n\n[LOAD]ESTABLECIENDO CONEXIÓN...\n[LOAD]PROCESANDO TIMBRE MENTAL...\n[LOAD]EXTRAYENDO ACORDES...\n[LOAD]ESPERE...');
 
     try {
       // 2. Fetch from AI Service
@@ -168,6 +199,7 @@ function App() {
         lyrics: aiConcept.lyrics,
         hasContinued: false
       });
+      setChordProContent(aiConcept.lyrics);
     } catch (err) {
       console.error(err);
       // Show connection error in the UI so the user knows the AI failed
@@ -178,6 +210,7 @@ function App() {
         lyrics: `\n\n[ERR]ERROR DE CONEXIÓN CON AZURE.\n[ERR]Revisa la consola del navegador (F12) para más detalles.\n[ERR]Asegúrate de que VITE_AZURE_API_KEY y VITE_AZURE_ENDPOINT sean correctos.\n[ERR]y reinicia el servidor con 'npm run dev'.`,
         hasContinued: false
       });
+      setChordProContent(`\n\n[ERR]ERROR DE CONEXIÓN CON AZURE.\n[ERR]Revisa la consola del navegador (F12) para más detalles.\n[ERR]Asegúrate de que VITE_AZURE_API_KEY y VITE_AZURE_ENDPOINT sean correctos.\n[ERR]y reinicia el servidor con 'npm run dev'.`);
     } finally {
       setIsLoading(false);
     }
@@ -186,9 +219,11 @@ function App() {
   const handleContinueLyrics = () => {
     const data = MOOD_DATA[concept.mood];
     if (data && !concept.hasContinued) {
+      const nextLyrics = chordProContent + data.continuation;
+      syncNotebookContent(nextLyrics);
       setConcept(prev => ({
         ...prev,
-        lyrics: prev.lyrics + data.continuation,
+        lyrics: nextLyrics,
         hasContinued: true
       }));
     }
@@ -203,7 +238,7 @@ function App() {
       mode: detected.mode,
       chords: concept.chords,
       capo: transposeSteps,
-      chordProContent: concept.lyrics,
+      chordProContent: chordProContent,
       language: lyricsControls.language,
       rhymeScheme: lyricsControls.rhymeScheme,
       transposition: transposeSteps,
@@ -246,6 +281,7 @@ function App() {
     setIsPracticeMode(false);
     setTransposeSteps(snapshot.player.transposition);
     setBpm(snapshot.player.bpm);
+    syncNotebookContent(snapshot.lyrics.chordProContent);
     setConcept({
       mood: snapshot.metadata.mood,
       chords: snapshot.music.chords,
@@ -265,7 +301,7 @@ function App() {
         mode: detected.mode,
         chords: concept.chords,
         capo: transposeSteps,
-        chordProContent: concept.lyrics,
+        chordProContent: chordProContent,
         language: lyricsControls.language,
         rhymeScheme: lyricsControls.rhymeScheme,
         transposition: transposeSteps,
@@ -288,6 +324,7 @@ function App() {
     setIsPracticeMode(false);
     setTransposeSteps(snapshot.player.transposition);
     setBpm(snapshot.player.bpm);
+    syncNotebookContent(snapshot.lyrics.chordProContent);
     setConcept({
       mood: snapshot.metadata.mood,
       chords: snapshot.music.chords,
@@ -373,7 +410,9 @@ function App() {
                 <MoodSelector 
                   value={concept.mood} 
                   onChange={handleMoodChange} 
-                  onBypass={() => handleBypass('control_panel')} 
+                  onBypass={() => handleBypass('control_panel')}
+                  collapsed={isPanelCollapsed('mood_selector')}
+                  onToggleCollapse={() => togglePanelCollapsed('mood_selector')}
                 />
 
                 <div className="mt-4">
@@ -399,10 +438,10 @@ function App() {
                       try {
                         const res = await lyricsControls.generateLyrics();
                         console.log('[App] generateLyrics returned:', res);
-                        // Inject ChordPro output into the existing lyrics notebook
+                        syncNotebookContent(res.chordProOutput);
                         setConcept((prev) => ({
                           ...prev,
-                          lyrics: prev.lyrics + '\n\n' + res.chordProOutput,
+                          lyrics: res.chordProOutput,
                           hasContinued: true,
                         }));
                       } catch (e) {
@@ -410,6 +449,8 @@ function App() {
                       }
                     }}
                     onBypass={() => handleBypass('control_panel')}
+                    collapsed={isPanelCollapsed('lyrics_controls')}
+                    onToggleCollapse={() => togglePanelCollapsed('lyrics_controls')}
                   />
 
                   <div className="mt-4">
@@ -525,6 +566,8 @@ function App() {
                       chords={concept.chords} 
                       transposeSteps={transposeSteps} 
                       onBypass={() => handleBypass('chord_monitor')}
+                      collapsed={isPanelCollapsed('chord_monitor')}
+                      onToggleCollapse={() => togglePanelCollapsed('chord_monitor')}
                     />
                   )}
                   
@@ -533,6 +576,8 @@ function App() {
                     <ScalePanel 
                       scale={concept.scale} 
                       onBypass={() => handleBypass('scale_visualizer')}
+                      collapsed={isPanelCollapsed('scale_visualizer')}
+                      onToggleCollapse={() => togglePanelCollapsed('scale_visualizer')}
                     />
                   )}
       
@@ -556,12 +601,14 @@ function App() {
                   {/* Sheet showing monospace typography */}
                   <div className="grow">
                     <LyricsSheet 
-                      lyrics={concept.lyrics} 
+                      lyrics={chordProContent} 
                       transposeSteps={transposeSteps} 
                       isPracticeMode={isPracticeMode}
-                        isLiveSessionActive={liveSession.isLiveSessionActive}
-                        activeLineIndex={liveSession.activeLineIndex}
+                      isLiveSessionActive={liveSession.isLiveSessionActive}
+                      activeLineIndex={liveSession.activeLineIndex}
                       onBypass={() => handleBypass('lyrics_sheet')}
+                      collapsed={isPanelCollapsed('lyrics_sheet')}
+                      onToggleCollapse={() => togglePanelCollapsed('lyrics_sheet')}
                     />
                   </div>
       
@@ -621,6 +668,18 @@ function App() {
                       </TactileButton>
                     </div>
                   </div>
+
+                  <div className="pt-2">
+                    <LiveSessionOverlay
+                      isActive={liveSession.isLiveSessionActive}
+                      activeChord={concept.chords[liveSession.activeChordIndex] ?? concept.chords[0] ?? ''}
+                      activeChordIndex={liveSession.activeChordIndex}
+                      currentMeasure={liveSession.currentMeasure}
+                      chordDurationsBars={liveSession.chordDurationsBars}
+                      onToggle={liveSession.toggleLiveSession}
+                      onSetChordDurationBars={liveSession.setChordDurationBars}
+                    />
+                  </div>
                 </div>
               )}
             </div>
@@ -633,16 +692,6 @@ function App() {
             </div>
           )}
         </main>
-
-        <LiveSessionOverlay
-          isActive={liveSession.isLiveSessionActive}
-          activeChord={concept.chords[liveSession.activeChordIndex] ?? concept.chords[0] ?? ''}
-          activeChordIndex={liveSession.activeChordIndex}
-          currentMeasure={liveSession.currentMeasure}
-          chordDurationsBars={liveSession.chordDurationsBars}
-          onToggle={liveSession.toggleLiveSession}
-          onSetChordDurationBars={liveSession.setChordDurationBars}
-        />
 
         <input
           ref={sessionFileInputRef}

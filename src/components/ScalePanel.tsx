@@ -4,12 +4,25 @@ import { ScaleVisualizer } from './ScaleVisualizer';
 interface ScalePanelProps {
   scale: string;
   onBypass?: () => void;
+  collapsed?: boolean;
+  onToggleCollapse?: () => void;
 }
 
-export const ScalePanel: React.FC<ScalePanelProps> = ({ scale, onBypass }) => {
+export const ScalePanel: React.FC<ScalePanelProps> = ({ scale, onBypass, collapsed = false, onToggleCollapse }) => {
   return (
     <div className="border border-zinc-700 bg-zinc-800 p-4 rounded-sm shadow-md flex flex-col space-y-4 select-none">
-      <div className="flex items-center justify-between border-b border-zinc-700 pb-2">
+      <div
+        className="flex items-center justify-between border-b border-zinc-700 pb-2 cursor-pointer"
+        onClick={onToggleCollapse}
+        role="button"
+        tabIndex={0}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            onToggleCollapse?.();
+          }
+        }}
+      >
         <div className="flex flex-col space-y-0.5">
           <span className="text-2xs font-mono font-bold tracking-wider text-zinc-400 uppercase">
             [RECEIVER] // SOLO SCALE VISUALIZER
@@ -33,7 +46,10 @@ export const ScalePanel: React.FC<ScalePanelProps> = ({ scale, onBypass }) => {
           {onBypass && (
             <button 
               type="button"
-              onClick={onBypass}
+              onClick={(event) => {
+                event.stopPropagation();
+                onBypass();
+              }}
               className="text-[9px] font-mono text-zinc-500 hover:text-red-500 border border-zinc-700 hover:border-red-900/50 px-1 py-0.5 rounded-sm bg-zinc-900 uppercase transition-colors cursor-pointer"
             >
               [ BYPASS ]
@@ -42,10 +58,12 @@ export const ScalePanel: React.FC<ScalePanelProps> = ({ scale, onBypass }) => {
         </div>
       </div>
 
-      {/* Visualizer Neck SVG Wrapper */}
-      <div className="w-full flex justify-center bg-zinc-900/40 border border-zinc-900/60 p-3 rounded-sm shadow-inner">
-        <ScaleVisualizer scaleName={scale} />
-      </div>
+      {!collapsed && (
+        /* Visualizer Neck SVG Wrapper */
+        <div className="w-full flex justify-center bg-zinc-900/40 border border-zinc-900/60 p-3 rounded-sm shadow-inner">
+          <ScaleVisualizer scaleName={scale} />
+        </div>
+      )}
     </div>
   );
 };

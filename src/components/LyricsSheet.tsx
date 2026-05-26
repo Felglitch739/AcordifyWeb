@@ -8,6 +8,8 @@ interface LyricsSheetProps {
   isLiveSessionActive?: boolean;
   activeLineIndex?: number;
   onBypass?: () => void;
+  collapsed?: boolean;
+  onToggleCollapse?: () => void;
 }
 
 interface LyricSegment {
@@ -71,6 +73,8 @@ export const LyricsSheet: React.FC<LyricsSheetProps> = ({
   isLiveSessionActive = false,
   activeLineIndex,
   onBypass,
+  collapsed = false,
+  onToggleCollapse,
 }) => {
   const lines = lyrics.split('\n');
   const scrollContainerRef = React.useRef<HTMLDivElement>(null);
@@ -106,7 +110,18 @@ export const LyricsSheet: React.FC<LyricsSheetProps> = ({
   return (
     <div className="border border-zinc-700 bg-zinc-900 rounded-sm shadow-lg overflow-hidden flex flex-col h-full min-h-[380px] relative select-text">
       {/* Tape Strip or Header strip at top */}
-      <div className="bg-zinc-950 border-b border-zinc-700 px-4 py-2 flex items-center justify-between select-none">
+      <div
+        className="bg-zinc-950 border-b border-zinc-700 px-4 py-2 flex items-center justify-between select-none cursor-pointer"
+        onClick={onToggleCollapse}
+        role="button"
+        tabIndex={0}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            onToggleCollapse?.();
+          }
+        }}
+      >
         <div className="flex items-center space-x-2">
           <div className="w-1.5 h-1.5 bg-zinc-500 rounded-none"></div>
           <span className="text-2xs font-mono font-bold tracking-wider text-zinc-400 uppercase">
@@ -120,7 +135,10 @@ export const LyricsSheet: React.FC<LyricsSheetProps> = ({
           {onBypass && (
             <button 
               type="button"
-              onClick={onBypass}
+              onClick={(event) => {
+                event.stopPropagation();
+                onBypass();
+              }}
               className="text-[9px] font-mono text-zinc-500 hover:text-red-500 border border-zinc-800 hover:border-red-900/50 px-1 py-0.5 rounded-sm bg-zinc-900 uppercase transition-colors cursor-pointer"
             >
               [ BYPASS ]
@@ -129,65 +147,69 @@ export const LyricsSheet: React.FC<LyricsSheetProps> = ({
         </div>
       </div>
 
-      {/* Sheet Content area: resembling typewriter paper on dark mode */}
-      <div 
-        ref={scrollContainerRef}
-        className="p-6 md:p-8 flex-grow bg-[#1c1c1e] relative overflow-y-auto overflow-x-auto"
-      >
-        {/* Subtle grid pattern background simulation in CSS */}
-        <div className="absolute inset-0 opacity-[0.03] pointer-events-none bg-[linear-gradient(to_bottom,rgba(255,255,255,1)_1px,transparent_1px)] bg-[size:100%_2.75rem]"></div>
-        
-        {/* The Lyrics & Chords Container */}
-        <div className="relative z-10 font-mono text-xs md:text-sm text-stone-200 flex flex-col space-y-6 leading-loose tracking-wide select-text border-l-2 border-zinc-800/50 pl-4 ml-2">
-          {lines.map((line, lineIdx) => {
-            const segments = parseChordProLine(line);
-            const isActiveLine = isLiveSessionActive && activeLineIndex === lineIdx;
+      {!collapsed && (
+        <>
+          {/* Sheet Content area: resembling typewriter paper on dark mode */}
+          <div 
+            ref={scrollContainerRef}
+            className="p-6 md:p-8 flex-grow bg-[#1c1c1e] relative overflow-y-auto overflow-x-auto"
+          >
+            {/* Subtle grid pattern background simulation in CSS */}
+            <div className="absolute inset-0 opacity-[0.03] pointer-events-none bg-[linear-gradient(to_bottom,rgba(255,255,255,1)_1px,transparent_1px)] bg-[size:100%_2.75rem]"></div>
+            
+            {/* The Lyrics & Chords Container */}
+            <div className="relative z-10 font-mono text-xs md:text-sm text-stone-200 flex flex-col space-y-6 leading-loose tracking-wide select-text border-l-2 border-zinc-800/50 pl-4 ml-2">
+              {lines.map((line, lineIdx) => {
+                const segments = parseChordProLine(line);
+                const isActiveLine = isLiveSessionActive && activeLineIndex === lineIdx;
 
-            return (
-              <div
-                key={lineIdx}
-                ref={(element) => {
-                  lineRefs.current[lineIdx] = element;
-                }}
-                className={`flex flex-wrap items-end min-h-[3rem] border-b pb-1 transition-colors ${
-                  isActiveLine ? 'border-orange-500/60 bg-orange-500/5' : 'border-zinc-900/50'
-                }`}
-              >
-                {segments.map((segment, segIdx) => {
-                  const hasChord = !!segment.chord;
-                  
-                  return (
-                    <div
-                      key={segIdx}
-                      className="inline-flex flex-col relative"
-                    >
-                      {/* Chord rendered directly above text */}
-                      <span
-                        className={`text-[11px] md:text-xs font-semibold text-amber-500 select-none pb-1 h-5 block ${
-                          hasChord ? 'opacity-100' : 'opacity-0 pointer-events-none'
-                        }`}
-                      >
-                        {segment.chord ? transposeChord(segment.chord, transposeSteps) : '\u00A0'}
-                      </span>
+                return (
+                  <div
+                    key={lineIdx}
+                    ref={(element) => {
+                      lineRefs.current[lineIdx] = element;
+                    }}
+                    className={`flex flex-wrap items-end min-h-[3rem] border-b pb-1 transition-colors ${
+                      isActiveLine ? 'border-orange-500/60 bg-orange-500/5' : 'border-zinc-900/50'
+                    }`}
+                  >
+                    {segments.map((segment, segIdx) => {
+                      const hasChord = !!segment.chord;
                       
-                      {/* Syllable/Text rendered directly below chord */}
-                      <span className="text-xs md:text-sm text-stone-200 font-normal whitespace-pre">
-                        {segment.text || (hasChord ? '\u00A0' : '')}
-                      </span>
-                    </div>
-                  );
-                })}
-              </div>
-            );
-          })}
-        </div>
-      </div>
+                      return (
+                        <div
+                          key={segIdx}
+                          className="inline-flex flex-col relative"
+                        >
+                          {/* Chord rendered directly above text */}
+                          <span
+                            className={`text-[11px] md:text-xs font-semibold text-amber-500 select-none pb-1 h-5 block ${
+                              hasChord ? 'opacity-100' : 'opacity-0 pointer-events-none'
+                            }`}
+                          >
+                            {segment.chord ? transposeChord(segment.chord, transposeSteps) : '\u00A0'}
+                          </span>
+                          
+                          {/* Syllable/Text rendered directly below chord */}
+                          <span className="text-xs md:text-sm text-stone-200 font-normal whitespace-pre">
+                            {segment.text || (hasChord ? '\u00A0' : '')}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
 
-      {/* Footer metadata stamp */}
-      <div className="bg-zinc-950 border-t border-zinc-800 px-4 py-3 flex justify-between items-center text-[9px] font-mono text-zinc-600 select-none">
-        <span>COL. PROD_CODER_REF // CHORDPRO LITE INTERPRETER</span>
-        <span>ACORDIFY CORP. © 2026</span>
-      </div>
+          {/* Footer metadata stamp */}
+          <div className="bg-zinc-950 border-t border-zinc-800 px-4 py-3 flex justify-between items-center text-[9px] font-mono text-zinc-600 select-none">
+            <span>COL. PROD_CODER_REF // CHORDPRO LITE INTERPRETER</span>
+            <span>ACORDIFY CORP. © 2026</span>
+          </div>
+        </>
+      )}
     </div>
   );
 };

@@ -21,7 +21,7 @@ export const LiveSessionOverlay: React.FC<LiveSessionOverlayProps> = ({
   onSetChordDurationBars,
 }) => {
   return (
-    <div className="fixed bottom-4 right-4 z-40 w-[320px] border border-zinc-700 bg-zinc-950/95 shadow-[0_0_30px_rgba(0,0,0,0.45)] backdrop-blur-sm">
+    <div className="w-full border border-zinc-700 bg-zinc-950/95 shadow-[0_0_30px_rgba(0,0,0,0.25)] backdrop-blur-sm">
       <div className="flex items-center justify-between border-b border-zinc-800 px-3 py-2">
         <span className="text-[10px] font-mono font-bold tracking-[0.24em] text-zinc-400 uppercase">
           [LIVE] // SESSION OVERLAY

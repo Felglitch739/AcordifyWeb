@@ -21,6 +21,8 @@ interface LyricsControlPanelProps {
   onLinesToGenerateChange: (value: LyricsParams['linesToGenerate']) => void;
   onGenerate: () => void;
   onBypass?: () => void;
+  collapsed?: boolean;
+  onToggleCollapse?: () => void;
 }
 
 const RHYME_OPTIONS: Array<LyricsParams['rhymeScheme']> = ['ABAB', 'AABB', 'ABBA', 'free'];
@@ -94,6 +96,8 @@ export const LyricsControlPanel: React.FC<LyricsControlPanelProps> = ({
   onLinesToGenerateChange,
   onGenerate,
   onBypass,
+  collapsed = false,
+  onToggleCollapse,
 }) => {
   const emotionalLabel = emotionalMood <= 50 ? 'MELANCÓLICO' : 'ESPERANZADOR';
   const emotionalDotLeft = emotionalMood <= 50;
@@ -102,7 +106,18 @@ export const LyricsControlPanel: React.FC<LyricsControlPanelProps> = ({
 
   return (
     <div className="border border-zinc-700 bg-zinc-800 p-4 rounded-sm shadow-md select-none flex flex-col gap-4">
-      <div className="flex items-center justify-between border-b border-zinc-700 pb-2">
+      <div
+        className="flex items-center justify-between border-b border-zinc-700 pb-2 cursor-pointer"
+        onClick={onToggleCollapse}
+        role="button"
+        tabIndex={0}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            onToggleCollapse?.();
+          }
+        }}
+      >
         <span className="text-2xs font-mono font-bold tracking-wider text-zinc-400 uppercase">
           [LYRICS] // ADVANCED PARAMETERS
         </span>
@@ -113,7 +128,10 @@ export const LyricsControlPanel: React.FC<LyricsControlPanelProps> = ({
           {onBypass && (
             <button
               type="button"
-              onClick={onBypass}
+              onClick={(event) => {
+                event.stopPropagation();
+                onBypass();
+              }}
               className="text-[9px] font-mono text-zinc-500 hover:text-red-500 border border-zinc-700 hover:border-red-900/50 px-1 py-0.5 rounded-sm bg-zinc-900 uppercase transition-colors cursor-pointer"
             >
               [ BYPASS ]
@@ -122,6 +140,8 @@ export const LyricsControlPanel: React.FC<LyricsControlPanelProps> = ({
         </div>
       </div>
 
+      {!collapsed && (
+        <>
       <div className="space-y-2">
         <div className="flex items-center justify-between">
           <label className="text-2xs font-mono font-bold tracking-wider text-zinc-400 uppercase">
@@ -322,6 +342,8 @@ export const LyricsControlPanel: React.FC<LyricsControlPanelProps> = ({
             <span className="text-emerald-400">OK // {result.emotionalTag}</span>
           ) : null}
         </div>
+      )}
+        </>
       )}
     </div>
   );
