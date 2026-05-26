@@ -4,6 +4,7 @@ export { MoodSelector } from './MoodSelector';
 export { ChordGrid } from './ChordGrid';
 export { ScalePanel } from './ScalePanel';
 export { LyricsSheet } from './LyricsSheet';
+export { LyricsControlPanel } from './LyricsControlPanel';
 export { Header } from './layout/Header';
 export { Fretboard } from './Fretboard';
 export { ScaleVisualizer } from './ScaleVisualizer';

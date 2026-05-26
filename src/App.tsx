@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react';
 import type { SongConcept } from './types';
-import { Header, MoodSelector, ChordGrid, ScalePanel, LyricsSheet, TactileButton } from './components';
+import { Header, MoodSelector, ChordGrid, ScalePanel, LyricsSheet, TactileButton, LyricsControlPanel } from './components';
 import { generateSongConcept } from './services';
 import { useAudioEngine } from './hooks';
+import { useLyricsControls } from './hooks';
+import { detectKey } from './utils';
 
 const MOOD_DATA: Record<string, { chords: string[]; scale: string; lyrics: string; continuation: string }> = {
   'Jazzy Melancólico': {
@@ -87,6 +89,15 @@ function App() {
     bpm,
     triggerLedPulse
   );
+
+  const detected = detectKey(concept.chords);
+  const lyricsControls = useLyricsControls({
+    activeChords: concept.chords,
+    keyRoot: detected.root,
+    mode: detected.mode,
+    bpm,
+    mood: concept.mood,
+  });
 
   // Synchronized metronome logic
   useEffect(() => {
@@ -241,6 +252,42 @@ function App() {
                   onChange={handleMoodChange} 
                   onBypass={() => handleBypass('control_panel')} 
                 />
+
+                <div className="mt-4">
+                  <LyricsControlPanel
+                    rhymeScheme={lyricsControls.rhymeScheme}
+                    emotionalMood={lyricsControls.emotionalMood}
+                    narrativePerson={lyricsControls.narrativePerson}
+                    metaphorDensity={lyricsControls.metaphorDensity}
+                    thematicConcept={lyricsControls.thematicConcept}
+                    language={lyricsControls.language}
+                    linesToGenerate={lyricsControls.linesToGenerate}
+                    isGenerating={lyricsControls.isGenerating}
+                    error={lyricsControls.error}
+                    result={lyricsControls.result}
+                    onRhymeSchemeChange={lyricsControls.setRhymeScheme}
+                    onEmotionalMoodChange={lyricsControls.setEmotionalMood}
+                    onNarrativePersonChange={lyricsControls.setNarrativePerson}
+                    onMetaphorDensityChange={lyricsControls.setMetaphorDensity}
+                    onThematicConceptChange={lyricsControls.setThematicConcept}
+                    onLanguageChange={lyricsControls.setLanguage}
+                    onLinesToGenerateChange={lyricsControls.setLinesToGenerate}
+                    onGenerate={async () => {
+                      try {
+                        const res = await lyricsControls.generateLyrics();
+                        // Inject ChordPro output into the existing lyrics notebook
+                        setConcept((prev) => ({
+                          ...prev,
+                          lyrics: prev.lyrics + '\n\n' + res.chordProOutput,
+                          hasContinued: true,
+                        }));
+                      } catch (e) {
+                        console.error('Failed to generate lyrics:', e);
+                      }
+                    }}
+                    onBypass={() => handleBypass('control_panel')}
+                  />
+                </div>
               </div>
             )}
             

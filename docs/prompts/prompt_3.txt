@@ -1,0 +1,152 @@
+ROLE:
+You are a senior prompt engineer and lyricist specializing in 
+co-writing systems for musicians. You understand prosody, rhyme 
+schemes, syllabic meter, and how lyrics interact with chord 
+progressions and tempo.
+
+PROJECT CONTEXT:
+Acordify is a React + TypeScript + Vite web app for musicians.
+It already has a ChordPro Notebook that shows chords above lyrics.
+The new feature is "Completar Verso": the user writes one or more 
+lines and the AI completes the stanza, preserving the user's voice, 
+rhyme scheme, syllabic pattern, and matching the active chord 
+progression and BPM.
+
+The feature lives inside the existing lyrics module and calls 
+Gemini / Azure OpenAI. The result is injected back into the 
+ChordPro Notebook with chord symbols already mapped above each line.
+
+TASK:
+Design the complete SYSTEM PROMPT + USER PROMPT TEMPLATE for 
+the "Completar Verso" feature, plus the TypeScript integration.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+RUNTIME VARIABLES:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  {{USER_LINES}}       — what the user already wrote
+                         e.g. "Bajo la luz del neón apagado,"
+                         can be 1 to 4 lines
+
+  {{ACTIVE_CHORDS}}    — current progression as array
+                         e.g. ["Cmaj7","Am9","Dm7","G13"]
+
+  {{KEY_ROOT}}         — e.g. "C"
+  {{MODE}}             — "major" | "minor"
+  {{BPM}}              — e.g. 90
+  {{MOOD}}             — e.g. "Jazz Melancólico"
+  {{LANGUAGE}}         — "es" | "en" (lyrics language)
+
+  {{RHYME_SCHEME}}     — "auto" | "ABAB" | "AABB" | "ABBA" | "free"
+                         if "auto", the AI infers from {{USER_LINES}}
+
+  {{LINES_TO_COMPLETE}} — how many lines to generate: 2 | 4
+
+  {{STYLE_HINT}}       — optional, user-provided creative direction
+                         e.g. "más oscuro", "más esperanzador", 
+                         "sin metáforas", "" if empty
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+STRICT REQUIREMENTS:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1. SYSTEM PROMPT must:
+   - Assign persona: co-writer who NEVER overwrites the user's 
+     voice — the AI completes, never replaces or rewrites
+   - Enforce syllabic consistency: count syllables in 
+     {{USER_LINES}} and match that range (±2 syllables) 
+     in generated lines
+   - Enforce rhyme scheme: if "auto", detect and continue it; 
+     otherwise follow {{RHYME_SCHEME}} strictly
+   - Map each generated line to a chord from {{ACTIVE_CHORDS}}:
+     * Lines with tension/conflict → map to non-tonic chords
+     * Lines with resolution/calm → map to tonic or subdominant
+   - Prohibit:
+     * Clichés: "amor eterno", "corazón roto", "sin ti no soy"
+     * Padding words used only to fill syllables
+     * Changing the person/voice (if user wrote in first person, 
+       AI stays in first person)
+   - Output: JSON only, no prose, no markdown fences
+
+2. USER PROMPT must:
+   - Present {{USER_LINES}} clearly labeled as "USER INPUT - DO NOT MODIFY"
+   - Pass chord + BPM context so the AI understands the rhythmic feel
+   - Ask for chord-to-line mapping explicitly in the output
+
+3. OUTPUT JSON SCHEMA:
+   {
+     "userLines": string[],        // original, untouched
+     "completedLines": [
+       {
+         "text": "string",         // generated lyric line
+         "chord": "string",        // chord that plays on this line
+         "syllableCount": number,  // syllable count of this line
+         "rhymeLabel": "string"    // e.g. "A", "B"
+       }
+     ],
+     "detectedRhymeScheme": "string",  // e.g. "ABAB"
+     "moodAlignment": "string",        // how the completion fits the mood
+     "alternativeEnding": string[]     // 1 alternative last line, just the text
+   }
+
+4. NEGATIVE EXAMPLES block:
+   Include 2 "NEVER do this" examples showing:
+   - A completion that ignores syllabic meter
+   - A completion that breaks the user's established rhyme
+
+5. POSITIVE EXAMPLES block:
+   Include 2 ideal completions for different moods:
+   - Jazz Melancólico en español, ABAB scheme
+   - Indie Rock en inglés, free verse
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+CONSTRAINTS:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+- SYSTEM PROMPT under 700 tokens
+- USER PROMPT template under 350 tokens
+- Compatible with Gemini 1.5 Pro and GPT-4o
+- Prompts written in English
+- Generated lyrics in {{LANGUAGE}}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+OUTPUT (what YOU must deliver):
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+[1] SYSTEM_PROMPT
+    Ready to paste, no modifications needed.
+
+[2] USER_PROMPT_TEMPLATE
+    With all {{VARIABLE}} placeholders intact.
+
+[3] TYPESCRIPT INTEGRATION
+    Interface: CompleteVerseParams {
+      userLines: string[]
+      activeChords: string[]
+      keyRoot: string
+      mode: 'major' | 'minor'
+      bpm: number
+      mood: string
+      language: 'es' | 'en'
+      rhymeScheme: 'auto' | 'ABAB' | 'AABB' | 'ABBA' | 'free'
+      linesToComplete: 2 | 4
+      styleHint?: string
+    }
+
+    Function: buildCompleteVersePrompt(params: CompleteVerseParams)
+    Returns: { systemPrompt: string, userPrompt: string }
+
+[4] PARSING + VALIDATION HELPER
+    parseCompleteVerseResponse(raw: string): CompleteVerseResult
+    - Validates schema strictly
+    - Checks syllableCount is within ±2 of user's lines average
+    - Checks chord values exist in activeChords array
+    - Returns typed object or throws descriptive error
+    - Interface: CompleteVerseResult matching the JSON schema above
+
+[5] CHORDPRO FORMATTER
+    toChordProFormat(result: CompleteVerseResult): string
+    Converts the JSON output to ChordPro notation ready to 
+    inject into the existing ChordPro Notebook component.
+    Example output:
+    [Cmaj7]Bajo la luz del neón apagado,
+    [Am9]busco acordes que no hagan ruido.
