@@ -138,6 +138,13 @@ export function useLyricsControls(options: UseLyricsControlsOptions): UseLyricsC
   ]);
 
   const generateLyrics = useCallback(async () => {
+    // Prevent attempting generation while chord data is placeholder/unavailable
+    if (lyricsParams.activeChords.some((c) => /LOAD|ERR|SYS_ERR/i.test(c))) {
+      const msg = 'Acordes activos no están listos. Espera a que finalice la generación de acordes.';
+      setError(msg);
+      throw new Error(msg);
+    }
+
     setIsGenerating(true);
     console.log('[useLyricsControls] generateLyrics START');
     setError(null);
