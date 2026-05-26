@@ -1,0 +1,3 @@
+// Custom hooks barrel export
+// Re-export all custom React hooks from this directory
+export { useAudioEngine } from './useAudioEngine';

@@ -1,0 +1,70 @@
+=======================================================================
+               DOCUMENTO DE CONTEXTO GLOBAL: ACORDIFY
+=======================================================================
+
+1. ¿QUÉ ES ACORDIFY?
+-----------------------------------------------------------------------
+Acordify es una aplicación web dinámica enfocada en la creación e 
+interpretación musical. Su propósito principal es asistir a músicos y 
+compositores en la generación de progresiones de acordes (con un fuerte 
+enfoque inicial en vibras indie/melancólicas), escalas musicales y 
+fragmentos de letras. 
+
+Originalmente concebida como una aplicación nativa para Android usando 
+Jetpack Compose, el proyecto mutó con éxito hacia una arquitectura web 
+moderna, modular y de alto rendimiento.
+
+2. STACK TECNOLÓGICO ACTUAL
+-----------------------------------------------------------------------
+    * Frontend: React, TypeScript, Vite.
+    * Estilos y UI: Tailwind CSS (con una línea estética Premium, táctil, 
+      inspirada en hardware real, huyendo del diseño genérico de IA).
+    * Integraciones de IA: Modelos de lenguaje mediante API keys de 
+      Gemini y Azure OpenAI para la generación de letras y flujos creativos.
+    * Audio y Ritmo: Tone.js (para la síntesis de audio y reproducción) 
+      junto con Web Audio API.
+    * Infraestructura: CI/CD automatizado mediante GitHub Actions.
+
+3. LO QUE YA ESTÁ HECHO (ESTADO ACTUAL)
+-----------------------------------------------------------------------
+    [x] Migración Completa: Transición exitosa de Jetpack Compose a la web 
+        con React + Vite.
+    [x] Motor de Audio (Tone.js): Motor personalizado para reproducir los 
+        acordes de manera interactiva.
+    [x] Herramientas del Reproductor:
+        - Transpositor de acordes dinámico (cambio de tonalidad al vuelo).
+        - Metrónomo visual e interactivo para mantener el tempo.
+        - Función de Auto-scroll para permitir la lectura manos libres al 
+          tocar la guitarra.
+    [x] Pipeline CI/CD: Automatización de despliegues configurada correctamente 
+        con GitHub Actions.
+
+4. HOJA DE RUTA: PASOS A FUTURO Y PRÓXIMAS IMPLEMENTACIONES
+-----------------------------------------------------------------------
+El desarrollo subsecuente se divide en tres bloques críticos: Optimización, 
+Funcionalidades Avanzadas de IA y Robustez del Sistema.
+
+    * [ ] Optimización de la Generación de Acordes:
+          Refinar el algoritmo o prompts que dictan las progresiones de 
+          acordes melancólicas e indie para garantizar coherencia armónica 
+          y frescura musical sin depender excesivamente de estructuras cliché.
+
+    * [ ] Expansión del Módulo de Letras (IA):
+          Mejorar la ventana de co-escritura con Gemini/Azure OpenAI. Añadir 
+          parámetros avanzados (parámetros de rima, métrica, estado de ánimo) 
+          para que los snippets generados se adapten milimétricamente al 
+          ritmo del metrónomo y la progresión activa.
+
+    * [ ] Refactorización y Tipado Estricto:
+          Robustecer la base de código TypeScript, asegurando que las 
+          interfaces del motor de audio (Tone.js) y las respuestas de las 
+          APIs estén fuertemente tipadas para prevenir bugs en producción.
+
+    * [ ] Cache y Persistencia Local:
+          Implementar almacenamiento (Local Run / IndexedDB) para que el 
+          usuario pueda guardar sus progresiones, transposiciones y letras 
+          favoritas sin necesidad de regenerarlas desde cero.
+
+=======================================================================
+                FIN DEL DOCUMENTO // ACTUALIZADO 2026
+=======================================================================

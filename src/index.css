@@ -1,0 +1,185 @@
+@import "tailwindcss";
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+@config "../tailwind.config.js";
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   Acordify — Global Stylesheet
+   Analogue Studio / Editorial Design System
+   ────────────────────────────────────────────────────────────────────────── */
+
+/* ─── Base Reset & Document Defaults ──────────────────────────────────────── */
+@layer base {
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+  }
+
+  html {
+    /* Prevent font-size inflation on mobile */
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+    /* Smooth scrolling — respects prefers-reduced-motion via Tailwind */
+    scroll-behavior: smooth;
+  }
+
+  body {
+    margin: 0;
+    padding: 0;
+
+    /* ── Design system: background & primary text ── */
+    background-color: #18181b; /* bg-background */
+    color: #f4f4f5;            /* text-main */
+
+    font-family: 'Inter', 'Helvetica Neue', Arial, sans-serif;
+    font-size: 1rem;
+    line-height: 1.625;
+    letter-spacing: 0em;
+
+    /* Render text crisply on both platforms */
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+
+  /* Meaningful focus rings — no blue browser default */
+  :focus-visible {
+    outline: 2px solid #4a5c3a; /* primary */
+    outline-offset: 2px;
+  }
+
+  /* Remove default focus outline for mouse users */
+  :focus:not(:focus-visible) {
+    outline: none;
+  }
+
+  /* Typography hierarchy */
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Inter', 'Helvetica Neue', Arial, sans-serif;
+    font-weight: 600;
+    color: #f4f4f5; /* text-main */
+    margin: 0;
+    line-height: 1.15;
+    letter-spacing: -0.02em;
+  }
+
+  p {
+    margin: 0;
+  }
+
+  /* Monospace — chords, lyrics, code */
+  code, kbd, pre, samp {
+    font-family: 'JetBrains Mono', 'Courier New', Courier, monospace;
+    font-size: 0.875em;
+  }
+
+  /* Anchor defaults — editorial, no underline decoration by default */
+  a {
+    color: inherit;
+    text-decoration: none;
+  }
+
+  /* Remove list chrome when a list is used as a nav/menu */
+  ul[role="list"],
+  ol[role="list"] {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  /* Images */
+  img, svg, video {
+    display: block;
+    max-width: 100%;
+  }
+
+  /* Prevent horizontal overflow */
+  body, #root {
+    overflow-x: hidden;
+  }
+}
+
+/* ─── Component Layer — Design System Atoms ──────────────────────────────── */
+@layer components {
+
+  /* Surface card — replaces the default div background */
+  .card {
+    background-color: #27272a; /* surface */
+    border: 1px solid #3f3f46; /* border */
+    border-radius: 4px;
+  }
+
+  /* Metadata / category label — wide-tracked caps */
+  .label-meta {
+    font-family: 'Inter', sans-serif;
+    font-size: 0.625rem;   /* 2xs */
+    font-weight: 600;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: #a1a1aa;         /* text-muted */
+  }
+
+  /* Chord chip — monospace token, tactile */
+  .chord-chip {
+    font-family: 'JetBrains Mono', 'Courier New', monospace;
+    font-size: 0.875rem;
+    font-weight: 500;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.25rem 0.625rem;
+    border-radius: 2px; /* sharp — sm */
+    background-color: #27272a; /* surface */
+    border: 1px solid #3f3f46; /* border */
+    color: #f4f4f5;            /* text-main */
+    transition: border-color 180ms cubic-bezier(0.25, 0.1, 0.25, 1.0);
+  }
+
+  .chord-chip:hover {
+    border-color: #4a5c3a; /* primary */
+  }
+
+  /* Divider — recessed hairline */
+  .divider {
+    border: none;
+    border-top: 1px solid #2d2d30; /* border-dim */
+    margin: 0;
+  }
+}
+
+/* ─── Utility Layer — One-off helpers ────────────────────────────────────── */
+@layer utilities {
+  /* Visually hidden — accessible off-screen text */
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border-width: 0;
+  }
+
+  /* Truncate with ellipsis */
+  .truncate-1 {
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 1;
+  }
+
+  .truncate-2 {
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+  }
+
+  /* Tabular numbers — keeps BPM / time displays from jumping */
+  .num-tabular {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum" 1;
+  }
+}
