@@ -138,11 +138,19 @@ export function useLyricsControls(options: UseLyricsControlsOptions): UseLyricsC
   ]);
 
   const generateLyrics = useCallback(async () => {
-    // Prevent attempting generation while chord data is placeholder/unavailable
-    if (lyricsParams.activeChords.some((c) => /LOAD|ERR|SYS_ERR/i.test(c))) {
-      const msg = 'Acordes activos no están listos. Espera a que finalice la generación de acordes.';
-      setError(msg);
-      throw new Error(msg);
+    // If active chords contain placeholders (e.g., during mood-change), substitute a safe fallback
+    const hasPlaceholders = lyricsParams.activeChords.some((c) => /LOAD|ERR|SYS_ERR/i.test(c));
+
+    const fallbackChords = ['C', 'G', 'Am', 'F'];
+    const paramsToUse = hasPlaceholders
+      ? { ...lyricsParams, activeChords: fallbackChords }
+      : lyricsParams;
+
+    if (hasPlaceholders) {
+      console.warn(
+        '[useLyricsControls] activeChords contained placeholders; using fallback progression:',
+        fallbackChords,
+      );
     }
 
     setIsGenerating(true);
@@ -150,7 +158,7 @@ export function useLyricsControls(options: UseLyricsControlsOptions): UseLyricsC
     setError(null);
 
     try {
-      const { systemPrompt, userPrompt } = buildLyricsPrompt(lyricsParams);
+      const { systemPrompt, userPrompt } = buildLyricsPrompt(paramsToUse);
       const apiKey = import.meta.env.VITE_AZURE_API_KEY;
       const endpoint = import.meta.env.VITE_AZURE_ENDPOINT;
 
@@ -183,7 +191,7 @@ export function useLyricsControls(options: UseLyricsControlsOptions): UseLyricsC
       console.log('[useLyricsControls] raw response:', payload);
       const content = extractAssistantContent(payload);
       const clean = cleanAssistantContent(content);
-      const parsed = parseLyricsResponse(clean, lyricsParams);
+      const parsed = parseLyricsResponse(clean, paramsToUse);
 
       console.log('[useLyricsControls] parsed result:', parsed);
 
