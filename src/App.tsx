@@ -271,6 +271,7 @@ function App() {
                     onGenerate={async () => {
                       try {
                         const res = await lyricsControls.generateLyrics();
+                        console.log('[App] generateLyrics returned:', res);
                         // Inject ChordPro output into the existing lyrics notebook
                         setConcept((prev) => ({
                           ...prev,

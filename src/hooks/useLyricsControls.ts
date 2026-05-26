@@ -139,6 +139,7 @@ export function useLyricsControls(options: UseLyricsControlsOptions): UseLyricsC
 
   const generateLyrics = useCallback(async () => {
     setIsGenerating(true);
+    console.log('[useLyricsControls] generateLyrics START');
     setError(null);
 
     try {
@@ -172,10 +173,12 @@ export function useLyricsControls(options: UseLyricsControlsOptions): UseLyricsC
       }
 
       const payload: unknown = await response.json();
-      console.log('raw response:', payload);
+      console.log('[useLyricsControls] raw response:', payload);
       const content = extractAssistantContent(payload);
       const clean = cleanAssistantContent(content);
       const parsed = parseLyricsResponse(clean, lyricsParams);
+
+      console.log('[useLyricsControls] parsed result:', parsed);
 
       if (mountedRef.current) {
         setResult(parsed);
@@ -193,6 +196,7 @@ export function useLyricsControls(options: UseLyricsControlsOptions): UseLyricsC
       throw caughtError;
     } finally {
       setIsGenerating(false);
+      console.log('[useLyricsControls] generateLyrics END - isGenerating set to false');
     }
   }, [lyricsParams]);
 
