@@ -1,6 +1,11 @@
 import React from 'react';
 
-export const Header: React.FC = () => {
+interface HeaderProps {
+  theme?: 'rack' | 'minimal';
+  onToggleTheme?: () => void;
+}
+
+export const Header: React.FC<HeaderProps> = ({ theme = 'rack', onToggleTheme }) => {
   return (
     <header className="w-full border-b border-zinc-700 bg-zinc-900 px-6 py-4 flex items-center justify-between select-none">
       <div className="flex items-center space-x-4">
@@ -27,6 +32,15 @@ export const Header: React.FC = () => {
           <span>•</span>
           <span className="text-zinc-400">44.1 KHZ</span>
         </div>
+        {onToggleTheme && (
+          <button
+            type="button"
+            onClick={onToggleTheme}
+            className="border border-zinc-700 px-2 py-1 text-[9px] font-mono uppercase tracking-widest text-zinc-400 hover:text-amber-400 hover:border-amber-500"
+          >
+            {theme === 'minimal' ? '[ THEME: MINIMAL ]' : '[ THEME: RACK ]'}
+          </button>
+        )}
       </div>
     </header>
   );

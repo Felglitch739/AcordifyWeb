@@ -13,3 +13,5 @@ export { SessionVaultPanel } from './SessionVaultPanel';
 export { Header } from './layout/Header';
 export { Fretboard } from './Fretboard';
 export { ScaleVisualizer } from './ScaleVisualizer';
+export { SongLookup } from './SongLookup';
+export { MobileWorkspace } from './mobile/MobileWorkspace';

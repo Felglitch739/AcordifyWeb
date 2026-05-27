@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState, type ChangeEvent } from 'react';
 import type { SongConcept } from './types';
-import { Header, MoodSelector, ChordGrid, ScalePanel, LyricsSheet, TactileButton, LyricsControlPanel, LiveSessionOverlay, SessionVaultPanel, StrumsVisualizer, PanelWrapper, SortableToggle } from './components';
+import { Header, MoodSelector, ChordGrid, ScalePanel, LyricsSheet, TactileButton, LyricsControlPanel, LiveSessionOverlay, SessionVaultPanel, StrumsVisualizer, PanelWrapper, SortableToggle, SongLookup, MobileWorkspace } from './components';
 import useWorkspaceLayout from './hooks/useWorkspaceLayout';
 import { DndContext, PointerSensor, KeyboardSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, rectSortingStrategy, sortableKeyboardCoordinates } from '@dnd-kit/sortable';
-import { generateSongConcept } from './services';
-import { useAudioEngine, useLiveSession, useLyricsControls, useStorage, useStrumSync } from './hooks';
-import { buildSessionSnapshot, detectKey, parseSessionSnapshot, serializeSessionSnapshot } from './utils';
+import { completeVerse, generateSongConcept } from './services';
+import { useAudioEngine, useIsMobile, useLiveSession, useLyricsControls, useStorage, useStrumSync } from './hooks';
+import { buildSessionSnapshot, detectKey, parseSessionSnapshot, serializeSessionSnapshot, validateProgression } from './utils';
 
 const MOOD_DATA: Record<string, { chords: string[]; scale: string; lyrics: string; continuation: string }> = {
   'Jazzy Melancólico': {
@@ -44,6 +44,15 @@ function App() {
 
   const [transposeSteps, setTransposeSteps] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
+  const [theme, setTheme] = useState<'rack' | 'minimal'>(() => {
+    try {
+      return window.localStorage.getItem('acordify_theme') === 'minimal' ? 'minimal' : 'rack';
+    } catch {
+      return 'rack';
+    }
+  });
+  const isMobile = useIsMobile();
+  const [toolsOpen, setToolsOpen] = useState(false);
   
   interface ModuleConfig {
     id: string;
@@ -53,6 +62,7 @@ function App() {
 
   const [modules, setModules] = useState<ModuleConfig[]>([
     { id: 'control_panel', name: 'CONTROL', isVisible: true },
+    { id: 'song_lookup', name: 'LOOKUP', isVisible: true },
     { id: 'transposer', name: 'PITCH', isVisible: true },
     { id: 'chord_monitor', name: 'MONITOR', isVisible: true },
     { id: 'lyrics_sheet', name: 'SHEET', isVisible: true },
@@ -105,6 +115,104 @@ function App() {
     }));
   };
 
+  const getSafeChords = () => {
+    const hasPlaceholders = concept.chords.some((c) => /LOAD|ERR|SYS_ERR/i.test(c));
+    return hasPlaceholders ? ['C', 'G', 'Am', 'F'] : concept.chords;
+  };
+
+  const handleMapChords = (currentText: string): string => {
+    const safeChords = getSafeChords();
+    let chordIndex = 0;
+    return currentText.split('\n').map((line) => {
+      if (!line.trim()) {
+        return line;
+      }
+      if (/\[[^\]]+\]/.test(line)) {
+        return line;
+      }
+      const chord = safeChords[chordIndex % safeChords.length];
+      chordIndex += 1;
+      return `[${chord}]${line}`;
+    }).join('\n');
+  };
+
+  const handleAssistWithAI = async (currentText: string): Promise<string> => {
+    const rawLines = currentText.split('\n').map((line) => line.trim()).filter(Boolean);
+    if (rawLines.length === 0) {
+      throw new Error('Escribe al menos una linea para continuar.');
+    }
+
+    const userLines = rawLines.slice(-4);
+    const linesToComplete = userLines.length <= 2 ? 2 : 4;
+    const safeChords = getSafeChords();
+
+    const result = await completeVerse({
+      userLines,
+      activeChords: safeChords,
+      keyRoot: detected.root,
+      mode: detected.mode,
+      bpm,
+      mood: concept.mood,
+      language: lyricsControls.language,
+      rhymeScheme: lyricsControls.rhymeScheme === 'free' ? 'free' : lyricsControls.rhymeScheme,
+      linesToComplete,
+      styleHint: lyricsControls.genre?.trim() || undefined,
+    });
+
+    const appended = result.completedLines
+      .map((line) => `[${line.chord}]${line.text}`)
+      .join('\n');
+
+    const prefix = currentText.trim().length ? `${currentText.trimEnd()}\n` : '';
+    return `${prefix}${appended}`;
+  };
+
+  const [notice, setNotice] = useState<{ type: 'success' | 'error' | 'warn'; text: string } | null>(null);
+
+  const handleSongLookupLoad = (res: import('./services').SongLookupResult) => {
+    if (!res) return;
+
+    if (!res.found) {
+      setNotice({ type: 'error', text: 'No se encontraron datos confiables.' });
+      setTimeout(() => setNotice(null), 3500);
+      return;
+    }
+
+    const chords = res.chords ?? [];
+    const keyRoot = (res.keyRoot as any) ?? (chords.length ? detectKey(chords).root : detectKey(concept.chords).root);
+    const mode = (res.mode as any) ?? (chords.length ? detectKey(chords).mode : detectKey(concept.chords).mode);
+
+    // Validate progression
+    let validation;
+    try {
+      validation = validateProgression(chords, keyRoot, mode as any);
+    } catch (e) {
+      validation = undefined;
+    }
+
+    const lowConfidence = (res.confidence ?? 0) < 0.7;
+    const lowCoherence = validation ? validation.overallCoherenceScore < 50 : false;
+
+    if (lowConfidence || lowCoherence) {
+      setNotice({ type: 'warn', text: '⚠ Acordes aproximados — verifica antes de tocar' });
+      setTimeout(() => setNotice(null), 5000);
+    } else {
+      setNotice({ type: 'success', text: `✓ Canción cargada: ${res.title ?? 'Sin título'} — ${res.artist ?? ''}` });
+      setTimeout(() => setNotice(null), 3200);
+    }
+
+    // Apply to workspace
+    setBpm(res.bpmSuggested ?? bpm);
+    syncNotebookContent(res.chordProContent ?? chordProContent);
+    setConcept({
+      mood: concept.mood,
+      chords: chords.length ? chords : concept.chords,
+      scale: `${keyRoot} ${mode === 'major' ? 'Mayor' : 'Menor'}`,
+      lyrics: res.chordProContent ?? chordProContent,
+      hasContinued: true,
+    });
+  };
+
   const togglePanelCollapsed = (panelId: string) => {
     setPanelCollapsed(prev => ({
       ...prev,
@@ -117,6 +225,14 @@ function App() {
   useEffect(() => {
     window.localStorage.setItem('acordify_panels', JSON.stringify(panelCollapsed));
   }, [panelCollapsed]);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem('acordify_theme', theme);
+    } catch {
+      // ignore write failures
+    }
+  }, [theme]);
 
   const triggerLedPulse = () => {
     setIsLedOn(true);
@@ -211,7 +327,7 @@ function App() {
 
     try {
       // 2. Fetch from AI Service
-      const aiConcept = await generateSongConcept(newMood);
+      const aiConcept = await generateSongConcept(newMood, lyricsControls.genre);
       
       // 3. Update with real signal
       setConcept({
@@ -376,119 +492,275 @@ function App() {
 
     const isLeftVisible = isModuleVisible('chord_monitor') || isModuleVisible('scale_visualizer');
     const isRightVisible = isModuleVisible('lyrics_sheet');
+    const rootClasses = `bg-zinc-900 min-h-screen text-stone-200 flex flex-col font-sans antialiased selection:bg-amber-600/30 selection:text-amber-500 relative ${theme === 'minimal' ? 'theme-minimal' : 'theme-rack'}`;
 
-    return (
-      <div className="bg-zinc-900 min-h-screen text-stone-200 flex flex-col font-sans antialiased selection:bg-amber-600/30 selection:text-amber-500 relative">
-        {/* Powder-coated Texture Noise Overlay */}
-        <div 
-          className="fixed inset-0 pointer-events-none opacity-[0.035] mix-blend-overlay z-50"
-          style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E")` }}
-        ></div>
-        {/* Brutalist Top Navigation Bar */}
-        <Header />
+    const mobileLyrics = (
+      <LyricsSheet
+        lyrics={chordProContent}
+        transposeSteps={transposeSteps}
+        isPracticeMode={isPracticeMode}
+        isLive={liveSession.isLive}
+        activeChord={liveSession.state.activeChord}
+        onLyricsChange={syncNotebookContent}
+        onAssistWithAI={handleAssistWithAI}
+        onMapChords={handleMapChords}
+        availableChords={concept.chords}
+        isMobile
+      />
+    );
 
-        {/* Workspace Desk Manager Panel */}
-        <div className="w-full border-b border-zinc-800 bg-zinc-950 px-4 md:px-6 py-3 flex flex-col sm:flex-row items-center justify-between select-none space-y-2.5 sm:space-y-0 shadow-inner z-10">
-          <div className="flex items-center space-x-2">
-            <span className="text-[10px] font-mono font-bold tracking-widest text-zinc-400 uppercase">
-              [ WORKSPACE DESK MANAGER ]
-            </span>
-          </div>
-          
-          <div className="flex flex-wrap items-center justify-center gap-2.5">
-            {/* Screen-reader instructions for keyboard DnD */}
-            <div id="workspace-dnd-instructions" className="sr-only">
-              Usa Barra espaciadora para levantar, Flechas para mover, Esc para cancelar.
+    const mobileTools = (
+      <>
+        <MoodSelector
+          value={concept.mood}
+          onChange={handleMoodChange}
+        />
+        <LyricsControlPanel
+          rhymeScheme={lyricsControls.rhymeScheme}
+          emotionalMood={lyricsControls.emotionalMood}
+          narrativePerson={lyricsControls.narrativePerson}
+          metaphorDensity={lyricsControls.metaphorDensity}
+          thematicConcept={lyricsControls.thematicConcept}
+          genre={lyricsControls.genre}
+          language={lyricsControls.language}
+          linesToGenerate={lyricsControls.linesToGenerate}
+          isGenerating={lyricsControls.isGenerating}
+          error={lyricsControls.error}
+          result={lyricsControls.result}
+          onRhymeSchemeChange={lyricsControls.setRhymeScheme}
+          onEmotionalMoodChange={lyricsControls.setEmotionalMood}
+          onNarrativePersonChange={lyricsControls.setNarrativePerson}
+          onMetaphorDensityChange={lyricsControls.setMetaphorDensity}
+          onThematicConceptChange={lyricsControls.setThematicConcept}
+          onGenreChange={lyricsControls.setGenre}
+          onLanguageChange={lyricsControls.setLanguage}
+          onLinesToGenerateChange={lyricsControls.setLinesToGenerate}
+          onGenerate={async () => {
+            try {
+              const res = await lyricsControls.generateLyrics();
+              syncNotebookContent(res.chordProOutput);
+              setConcept((prev) => ({
+                ...prev,
+                lyrics: res.chordProOutput,
+                hasContinued: true,
+              }));
+            } catch (e) {
+              console.error('Failed to generate lyrics:', e);
+            }
+          }}
+        />
+        <PanelWrapper
+          className="bg-zinc-800"
+          title={(
+            <label className="text-2xs font-mono font-bold tracking-wider text-zinc-400 uppercase">
+              [PITCH] // SMART TRANSPOSER
+            </label>
+          )}
+          contentClassName="p-4 flex flex-col space-y-3"
+        >
+          <div className="grow flex items-center justify-center space-x-3">
+            <TactileButton variant="zinc" onClick={() => setTransposeSteps(s => s - 1)} className="px-3! py-2! text-2xs!">
+              -1 ST
+            </TactileButton>
+            <div className="bg-zinc-950 px-3 py-2 border border-zinc-800 rounded-sm font-mono text-xs text-amber-500 font-bold uppercase w-24 text-center shadow-inner">
+              CAPO: {transposeSteps > 0 ? `+${transposeSteps}` : transposeSteps}
             </div>
-            {!isTouchDevice ? (
-              <DndContext
-                sensors={useSensors(useSensor(PointerSensor), useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }))}
-                onDragStart={(ev) => setDragActiveId(String(ev.active.id))}
-                onDragOver={(ev) => setDragOverId(ev.over ? String(ev.over.id) : null)}
-                onDragEnd={(event: DragEndEvent) => {
-                  const { active, over } = event;
-                  setDragActiveId(null);
-                  setDragOverId(null);
-                  if (!over) return;
-                  workspaceLayout.handleDragEnd(String(active.id), String(over.id));
-                }}
-                onDragCancel={() => { setDragActiveId(null); setDragOverId(null); }}
-              >
-                <SortableContext items={modules.map(m => m.id)} strategy={rectSortingStrategy}>
-                  {modules.map((mod, idx) => (
-                    <div key={mod.id} className="relative">
-                      {/* Drop placeholder appears before the hovered target */}
-                      {dragOverId === mod.id && dragActiveId && dragActiveId !== mod.id && (
-                        <div className="absolute -top-3 left-0 right-0 flex justify-center pointer-events-none">
-                          <div className="bg-amber-500/10 backdrop-blur-sm rounded-full px-2 py-0.5 shadow-md transition-all duration-200 ease-out transform -translate-y-1 opacity-100">
-                            <svg width="18" height="10" viewBox="0 0 24 14" fill="none" xmlns="http://www.w3.org/2000/svg" className="text-amber-400">
-                              <path d="M2 7h18" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                              <path d="M12 1l6 6-6 6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                            </svg>
-                          </div>
-                        </div>
-                      )}
-
-                      <SortableToggle key={mod.id} id={mod.id}>
-                        <div className={`transition-all duration-200 ${dragOverId === mod.id ? 'ring-2 ring-amber-500/30 shadow-[0_8px_20px_rgba(245,158,11,0.12)] scale-102' : ''}`}>
-                          <button
-                            type="button"
-                            onClick={() => toggleModule(mod.id)}
-                            className={`flex items-center space-x-2 px-2.5 py-1 border rounded-sm font-mono text-[9px] uppercase tracking-wider font-semibold select-none transition-all duration-150 cursor-pointer ${
-                              mod.isVisible
-                                ? 'bg-zinc-900 text-stone-200 border-zinc-700 hover:bg-zinc-800 hover:border-zinc-600'
-                                : 'bg-zinc-950 text-zinc-600 border-zinc-900 hover:bg-zinc-900'
-                            }`}
-                          >
-                            <div 
-                              className={`w-1.5 h-1.5 rounded-full transition-all duration-75 ${
-                                mod.isVisible 
-                                  ? 'bg-emerald-500 shadow-[0_0_6px_#10b981]' 
-                                  : 'bg-red-700/50'
-                              }`}
-                            ></div>
-                            <span>
-                              {mod.isVisible ? `[ON] ${mod.name}` : `[OFF] ${mod.name}`}
-                            </span>
-                          </button>
-                        </div>
-                      </SortableToggle>
-                    </div>
-                  ))}
-                </SortableContext>
-              </DndContext>
-            ) : (
-              // Touch devices: render static controls without drag handles
-              modules.map(mod => (
-                <div key={mod.id} className="inline-block">
-                  <button
-                    type="button"
-                    onClick={() => toggleModule(mod.id)}
-                    className={`flex items-center space-x-2 px-2.5 py-1 border rounded-sm font-mono text-[9px] uppercase tracking-wider font-semibold select-none transition-all duration-100 cursor-pointer ${
-                      mod.isVisible
-                        ? 'bg-zinc-900 text-stone-200 border-zinc-700 hover:bg-zinc-800 hover:border-zinc-600'
-                        : 'bg-zinc-950 text-zinc-600 border-zinc-900 hover:bg-zinc-900'
-                    }`}
-                  >
-                    <div 
-                      className={`w-1.5 h-1.5 rounded-full transition-all duration-75 ${
-                        mod.isVisible 
-                          ? 'bg-emerald-500 shadow-[0_0_6px_#10b981]' 
-                          : 'bg-red-700/50'
-                      }`}
-                    ></div>
-                    <span>
-                      {mod.isVisible ? `[ON] ${mod.name}` : `[OFF] ${mod.name}`}
-                    </span>
-                  </button>
-                </div>
-              ))
-            )}
+            <TactileButton variant="zinc" onClick={() => setTransposeSteps(s => s + 1)} className="px-3! py-2! text-2xs!">
+              +1 ST
+            </TactileButton>
+          </div>
+          <StrumsVisualizer
+            state={strums.state}
+            onPrevPattern={strums.prevPattern}
+            onNextPattern={strums.nextPattern}
+            onTogglePlay={strums.toggle}
+          />
+        </PanelWrapper>
+        <PanelWrapper
+          className="bg-zinc-800"
+          title={(
+            <label className="text-2xs font-mono font-bold tracking-wider text-zinc-400 uppercase">
+              [LOOKUP] // SONG SEARCH
+            </label>
+          )}
+          contentClassName="p-4"
+        >
+          <SongLookup onLoad={handleSongLookupLoad} />
+        </PanelWrapper>
+        <SessionVaultPanel
+          sessions={storage.sessions}
+          isLoading={storage.isLoading}
+          error={storage.error}
+          onSaveCurrent={handleSaveCurrentSession}
+          onLoadSession={handleLoadStoredSession}
+          onDeleteSession={handleDeleteStoredSession}
+          onExportBackup={handleExportBackup}
+          onImportBackup={handleImportBackup}
+          onRefresh={storage.refreshSessions}
+        />
+        <div className="border border-zinc-800 bg-zinc-950 p-3 rounded-sm flex flex-col gap-2">
+          <span className="text-[10px] font-mono uppercase tracking-widest text-zinc-500">[ SESSION IO ]</span>
+          <div className="flex flex-wrap gap-2">
+            <TactileButton variant="zinc" onClick={handleExportSession}>
+              EXPORT JSON
+            </TactileButton>
+            <TactileButton variant="zinc" onClick={handleImportSessionClick}>
+              IMPORT JSON
+            </TactileButton>
           </div>
         </div>
-  
-        {/* Main Screen Layout */}
-        <main className="max-w-7xl w-full mx-auto p-4 md:p-6 lg:p-8 grow flex flex-col space-y-8">
+      </>
+    );
+
+    return (
+      <div className={rootClasses}>
+        {theme === 'rack' && (
+          <div
+            className="fixed inset-0 pointer-events-none opacity-[0.035] mix-blend-overlay z-50"
+            style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E")` }}
+          ></div>
+        )}
+
+        {!isMobile && (
+          <Header
+            theme={theme}
+            onToggleTheme={() => setTheme((prev) => (prev === 'rack' ? 'minimal' : 'rack'))}
+          />
+        )}
+
+        {notice && (
+          <div
+            role="status"
+            aria-live="polite"
+            aria-atomic="true"
+            className={`fixed top-4 right-4 z-60 px-4 py-2 rounded-sm font-mono text-sm ${notice.type === 'success' ? 'bg-emerald-600 text-zinc-950' : notice.type === 'error' ? 'bg-red-600 text-zinc-950' : 'bg-amber-500 text-zinc-950'}`}
+          >
+            {notice.text}
+          </div>
+        )}
+
+        {isMobile ? (
+          <MobileWorkspace
+            mood={concept.mood}
+            bpm={bpm}
+            isPlaying={isPlaying}
+            isLive={liveSession.isLive}
+            theme={theme}
+            onToggleTheme={() => setTheme((prev) => (prev === 'rack' ? 'minimal' : 'rack'))}
+            onTogglePlay={handlePlayLoopToggle}
+            onToggleLive={liveSession.isLive ? liveSession.stopLive : liveSession.startLive}
+            onDecreaseBpm={() => setBpm((prev) => Math.max(40, prev - 5))}
+            onIncreaseBpm={() => setBpm((prev) => Math.min(240, prev + 5))}
+            toolsOpen={toolsOpen}
+            onToggleTools={() => setToolsOpen((prev) => !prev)}
+            onCloseTools={() => setToolsOpen(false)}
+            toolsContent={mobileTools}
+            lyricsContent={mobileLyrics}
+          />
+        ) : (
+          <>
+            {/* Workspace Desk Manager Panel */}
+            <div className="w-full border-b border-zinc-800 bg-zinc-950 px-4 md:px-6 py-3 flex flex-col sm:flex-row items-center justify-between select-none space-y-2.5 sm:space-y-0 shadow-inner z-10">
+              <div className="flex items-center space-x-2">
+                <span className="text-[10px] font-mono font-bold tracking-widest text-zinc-400 uppercase">
+                  [ WORKSPACE DESK MANAGER ]
+                </span>
+              </div>
+              
+              <div className="flex flex-wrap items-center justify-center gap-2.5">
+                {/* Screen-reader instructions for keyboard DnD */}
+                <div id="workspace-dnd-instructions" className="sr-only">
+                  Usa Barra espaciadora para levantar, Flechas para mover, Esc para cancelar.
+                </div>
+                {!isTouchDevice ? (
+                  <DndContext
+                    sensors={useSensors(useSensor(PointerSensor), useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }))}
+                    onDragStart={(ev) => setDragActiveId(String(ev.active.id))}
+                    onDragOver={(ev) => setDragOverId(ev.over ? String(ev.over.id) : null)}
+                    onDragEnd={(event: DragEndEvent) => {
+                      const { active, over } = event;
+                      setDragActiveId(null);
+                      setDragOverId(null);
+                      if (!over) return;
+                      workspaceLayout.handleDragEnd(String(active.id), String(over.id));
+                    }}
+                    onDragCancel={() => { setDragActiveId(null); setDragOverId(null); }}
+                  >
+                    <SortableContext items={modules.map(m => m.id)} strategy={rectSortingStrategy}>
+                      {modules.map((mod, idx) => (
+                        <div key={mod.id} className="relative">
+                          {/* Drop placeholder appears before the hovered target */}
+                          {dragOverId === mod.id && dragActiveId && dragActiveId !== mod.id && (
+                            <div className="absolute -top-3 left-0 right-0 flex justify-center pointer-events-none">
+                              <div className="bg-amber-500/10 backdrop-blur-sm rounded-full px-2 py-0.5 shadow-md transition-all duration-200 ease-out transform -translate-y-1 opacity-100">
+                                <svg width="18" height="10" viewBox="0 0 24 14" fill="none" xmlns="http://www.w3.org/2000/svg" className="text-amber-400">
+                                  <path d="M2 7h18" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                                  <path d="M12 1l6 6-6 6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                                </svg>
+                              </div>
+                            </div>
+                          )}
+
+                          <SortableToggle key={mod.id} id={mod.id}>
+                            <div className={`transition-all duration-200 ${dragOverId === mod.id ? 'ring-2 ring-amber-500/30 shadow-[0_8px_20px_rgba(245,158,11,0.12)] scale-102' : ''}`}>
+                              <button
+                                type="button"
+                                onClick={() => toggleModule(mod.id)}
+                                className={`flex items-center space-x-2 px-2.5 py-1 border rounded-sm font-mono text-[9px] uppercase tracking-wider font-semibold select-none transition-all duration-150 cursor-pointer ${
+                                  mod.isVisible
+                                    ? 'bg-zinc-900 text-stone-200 border-zinc-700 hover:bg-zinc-800 hover:border-zinc-600'
+                                    : 'bg-zinc-950 text-zinc-600 border-zinc-900 hover:bg-zinc-900'
+                                }`}
+                              >
+                                <div 
+                                  className={`w-1.5 h-1.5 rounded-full transition-all duration-75 ${
+                                    mod.isVisible 
+                                      ? 'bg-emerald-500 shadow-[0_0_6px_#10b981]' 
+                                      : 'bg-red-700/50'
+                                  }`}
+                                ></div>
+                                <span>
+                                  {mod.isVisible ? `[ON] ${mod.name}` : `[OFF] ${mod.name}`}
+                                </span>
+                              </button>
+                            </div>
+                          </SortableToggle>
+                        </div>
+                      ))}
+                    </SortableContext>
+                  </DndContext>
+                ) : (
+                  // Touch devices: render static controls without drag handles
+                  modules.map(mod => (
+                    <div key={mod.id} className="inline-block">
+                      <button
+                        type="button"
+                        onClick={() => toggleModule(mod.id)}
+                        className={`flex items-center space-x-2 px-2.5 py-1 border rounded-sm font-mono text-[9px] uppercase tracking-wider font-semibold select-none transition-all duration-100 cursor-pointer ${
+                          mod.isVisible
+                            ? 'bg-zinc-900 text-stone-200 border-zinc-700 hover:bg-zinc-800 hover:border-zinc-600'
+                            : 'bg-zinc-950 text-zinc-600 border-zinc-900 hover:bg-zinc-900'
+                        }`}
+                      >
+                        <div 
+                          className={`w-1.5 h-1.5 rounded-full transition-all duration-75 ${
+                            mod.isVisible 
+                              ? 'bg-emerald-500 shadow-[0_0_6px_#10b981]' 
+                              : 'bg-red-700/50'
+                          }`}
+                        ></div>
+                        <span>
+                          {mod.isVisible ? `[ON] ${mod.name}` : `[OFF] ${mod.name}`}
+                        </span>
+                      </button>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+    
+            {/* Main Screen Layout */}
+            <main className="max-w-7xl w-full mx-auto p-4 md:p-6 lg:p-8 grow flex flex-col space-y-8">
           
           {/* Top Control Panel: Mood, Smart Transposer & Practice Engine */}
           <div className="flex flex-wrap gap-6 items-start">
@@ -509,6 +781,7 @@ function App() {
                     narrativePerson={lyricsControls.narrativePerson}
                     metaphorDensity={lyricsControls.metaphorDensity}
                     thematicConcept={lyricsControls.thematicConcept}
+                    genre={lyricsControls.genre}
                     language={lyricsControls.language}
                     linesToGenerate={lyricsControls.linesToGenerate}
                     isGenerating={lyricsControls.isGenerating}
@@ -519,6 +792,7 @@ function App() {
                     onNarrativePersonChange={lyricsControls.setNarrativePerson}
                     onMetaphorDensityChange={lyricsControls.setMetaphorDensity}
                     onThematicConceptChange={lyricsControls.setThematicConcept}
+                    onGenreChange={lyricsControls.setGenre}
                     onLanguageChange={lyricsControls.setLanguage}
                     onLinesToGenerateChange={lyricsControls.setLinesToGenerate}
                     onGenerate={async () => {
@@ -539,6 +813,20 @@ function App() {
                     collapsed={isPanelCollapsed('lyrics_controls')}
                     onToggleCollapse={() => togglePanelCollapsed('lyrics_controls')}
                   />
+                </div>
+                
+                <div className="mt-4">
+                  <PanelWrapper
+                    title={(
+                      <label className="text-2xs font-mono font-bold tracking-wider text-zinc-400 uppercase">[LOOKUP] // SONG SEARCH</label>
+                    )}
+                    collapsed={isPanelCollapsed('song_lookup')}
+                    onToggleCollapse={() => togglePanelCollapsed('song_lookup')}
+                    onBypass={() => handleBypass('song_lookup')}
+                    contentClassName="p-4"
+                  >
+                    <SongLookup onLoad={handleSongLookupLoad} />
+                  </PanelWrapper>
                 </div>
               </div>
             )}
@@ -704,6 +992,10 @@ function App() {
                       isPracticeMode={isPracticeMode}
                       isLive={liveSession.isLive}
                       activeChord={liveSession.state.activeChord}
+                      onLyricsChange={syncNotebookContent}
+                      onAssistWithAI={handleAssistWithAI}
+                      onMapChords={handleMapChords}
+                      availableChords={concept.chords}
                       onBypass={() => handleBypass('lyrics_sheet')}
                       collapsed={isPanelCollapsed('lyrics_sheet')}
                       onToggleCollapse={() => togglePanelCollapsed('lyrics_sheet')}
@@ -771,6 +1063,8 @@ function App() {
             </div>
           )}
         </main>
+          </>
+        )}
 
         <input
           ref={sessionFileInputRef}

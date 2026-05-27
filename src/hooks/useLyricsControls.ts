@@ -7,7 +7,7 @@ export interface UseLyricsControlsOptions {
   mode: 'major' | 'minor';
   bpm: number;
   mood: string;
-  initialValues?: Partial<Pick<LyricsParams, 'rhymeScheme' | 'emotionalMood' | 'narrativePerson' | 'metaphorDensity' | 'thematicConcept' | 'language' | 'linesToGenerate'>>;
+  initialValues?: Partial<Pick<LyricsParams, 'rhymeScheme' | 'emotionalMood' | 'narrativePerson' | 'metaphorDensity' | 'thematicConcept' | 'language' | 'linesToGenerate' | 'genre'>>;
 }
 
 export interface UseLyricsControlsResult {
@@ -17,6 +17,7 @@ export interface UseLyricsControlsResult {
   narrativePerson: LyricsParams['narrativePerson'];
   metaphorDensity: LyricsParams['metaphorDensity'];
   thematicConcept: string;
+  genre: string;
   language: LyricsParams['language'];
   linesToGenerate: LyricsParams['linesToGenerate'];
   isGenerating: boolean;
@@ -27,6 +28,7 @@ export interface UseLyricsControlsResult {
   setNarrativePerson: (value: LyricsParams['narrativePerson']) => void;
   setMetaphorDensity: (value: LyricsParams['metaphorDensity']) => void;
   setThematicConcept: (value: string) => void;
+  setGenre: (value: string) => void;
   setLanguage: (value: LyricsParams['language']) => void;
   setLinesToGenerate: (value: LyricsParams['linesToGenerate']) => void;
   generateLyrics: () => Promise<LyricsResult>;
@@ -39,6 +41,7 @@ const DEFAULT_INITIALS = {
   narrativePerson: '1ra' as const,
   metaphorDensity: 'balanced' as const,
   thematicConcept: '',
+  genre: '',
   language: 'es' as const,
   linesToGenerate: 4 as const,
 };
@@ -50,6 +53,10 @@ function clampMood(value: number): number {
 
 function clampConcept(value: string): string {
   return value.slice(0, 60);
+}
+
+function clampGenre(value: string): string {
+  return value.slice(0, 40);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -88,6 +95,7 @@ export function useLyricsControls(options: UseLyricsControlsOptions): UseLyricsC
   const [narrativePerson, setNarrativePerson] = useState<LyricsParams['narrativePerson']>(options.initialValues?.narrativePerson ?? DEFAULT_INITIALS.narrativePerson);
   const [metaphorDensity, setMetaphorDensity] = useState<LyricsParams['metaphorDensity']>(options.initialValues?.metaphorDensity ?? DEFAULT_INITIALS.metaphorDensity);
   const [thematicConcept, setThematicConceptState] = useState<string>(options.initialValues?.thematicConcept ?? DEFAULT_INITIALS.thematicConcept);
+  const [genre, setGenreState] = useState<string>(options.initialValues?.genre ?? DEFAULT_INITIALS.genre);
   const [language, setLanguage] = useState<LyricsParams['language']>(options.initialValues?.language ?? DEFAULT_INITIALS.language);
   const [linesToGenerate, setLinesToGenerate] = useState<LyricsParams['linesToGenerate']>(options.initialValues?.linesToGenerate ?? DEFAULT_INITIALS.linesToGenerate);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -109,12 +117,17 @@ export function useLyricsControls(options: UseLyricsControlsOptions): UseLyricsC
     setThematicConceptState(clampConcept(value));
   }, []);
 
+  const setGenre = useCallback((value: string) => {
+    setGenreState(clampGenre(value));
+  }, []);
+
   const lyricsParams: LyricsParams = useMemo(() => ({
     activeChords: options.activeChords,
     keyRoot: options.keyRoot,
     mode: options.mode,
     bpm: options.bpm,
     mood: options.mood,
+    genre: clampGenre(genre),
     rhymeScheme,
     emotionalMood,
     narrativePerson,
@@ -133,6 +146,7 @@ export function useLyricsControls(options: UseLyricsControlsOptions): UseLyricsC
     narrativePerson,
     metaphorDensity,
     thematicConcept,
+    genre,
     language,
     linesToGenerate,
   ]);
@@ -227,6 +241,7 @@ export function useLyricsControls(options: UseLyricsControlsOptions): UseLyricsC
     narrativePerson,
     metaphorDensity,
     thematicConcept,
+    genre,
     language,
     linesToGenerate,
     isGenerating,
@@ -237,6 +252,7 @@ export function useLyricsControls(options: UseLyricsControlsOptions): UseLyricsC
     setNarrativePerson,
     setMetaphorDensity,
     setThematicConcept,
+    setGenre,
     setLanguage,
     setLinesToGenerate,
     generateLyrics,

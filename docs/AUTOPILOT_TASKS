@@ -1,0 +1,440 @@
+# ACORDIFY — AUTOPILOT SESSION
+> Instrucciones para GitHub Copilot. Ejecutar en orden.
+> Leer /docs/ROADMAP.md antes de empezar.
+> NO pedir confirmación entre tareas. Completar todo.
+
+---
+
+## REGLAS GLOBALES PARA ESTA SESIÓN
+
+- Stack: React + TypeScript + Vite + Tailwind CSS + Tone.js
+- Cero `any` en TypeScript
+- Cero inline styles (excepción: valores rgba dinámicos)
+- Tailwind only para estilos
+- Componentes funcionales únicamente
+- Lógica en hooks, UI en componentes, funciones puras en utils
+- Estética: rack/hardware industrial, dark bg, naranja #f97316, verde #22c55e
+- NO romper funcionalidad existente
+- NO detener Tone.js Transport en ningún cleanup
+- Después de cada tarea: verificar que el proyecto compila sin errores
+
+---
+
+## TAREA 1 — Fix: Song Lookup con Web Search real
+
+**Problema:** El Song Lookup dice "No se encontraron datos confiables"
+porque el modelo no tiene acceso a internet.
+
+**Fix en** `/src/services/songLookupService.ts`:
+
+1. Añadir web search tool al API call:
+```typescript
+tools: [
+  {
+    type: "web_search_20250305",
+    name: "web_search"
+  }
+]
+```
+
+2. El prompt al modelo debe incluir:
+```
+Search the web for the chord chart of "{{SONG_TITLE}}".
+Find the official or most accurate chord progression.
+Return ONLY a JSON object, no prose.
+```
+
+3. Al parsear la respuesta, buscar bloques `type: "tool_result"`
+además del `type: "text"` para extraer los datos.
+Si el modelo usó web search, los acordes vienen en tool_result.
+
+4. Si `confidence < 0.7` mostrar warning en amarillo:
+`⚠ Acordes aproximados — verifica antes de tocar`
+
+5. Si `found: false` mostrar en rojo:
+`✗ No se encontraron datos confiables para esta canción`
+
+---
+
+## TAREA 2 — Fix: Moods — Añadir input de género libre
+
+**Problema:** El usuario quiere poder escribir cualquier género
+además de los predefinidos (Jazz, Indie, Pop).
+
+**En** `[CONTROL PANEL] // MOOD CHASSIS SELECT`:
+
+1. Debajo de las tarjetas de mood predefinidos, añadir:
+```
+[CUSTOM] // GÉNERO LIBRE
+[ input: "ej: bolero, trap melancólico, bossa nova..." ]
+```
+Con max 40 chars y contador `0/40`
+
+2. Si el usuario escribe en el input custom:
+- Se deseleccionan las tarjetas predefinidas
+- El "ANALOGUE DIAL BYPASS" dropdown muestra "CUSTOM: {lo que escribió}"
+- El mood que se pasa a todos los servicios (lyricsService, 
+  chordPromptBuilder) es el texto libre del usuario
+
+3. Si el usuario selecciona una tarjeta predefinida:
+- Se limpia el input custom
+- Vuelve a funcionar como antes
+
+4. Persistir el custom mood en el estado global de la app
+
+---
+
+## TAREA 3 — Fix visual: Acordes en tarjetas Monitor no truncar
+
+**Problema:** Las tarjetas del `[MONITOR] // SIGNAL PROGRESSION`
+muestran "CMAJ7", "AM7" etc correctamente ahora pero el
+tamaño de fuente debe adaptarse al largo del símbolo.
+
+**En el componente de tarjeta de acorde:**
+
+1. Si el símbolo tiene ≤ 2 chars: `text-5xl`
+2. Si tiene 3-4 chars: `text-4xl`  
+3. Si tiene 5+ chars: `text-2xl`
+4. Nunca truncar con `...` — siempre mostrar símbolo completo
+
+---
+
+## TAREA 4 — Fix visual: Panel Pitch vacío
+
+**Problema:** `[PITCH] // SMART TRANSPOSER` tiene mucho espacio
+vacío arriba de los botones -1ST / CAPO / +1ST.
+
+**Fix:**
+1. Mover `StrumsVisualizer` (si existe y está montado en otro lugar)
+   al interior del panel Pitch, arriba de los controles de transposición
+2. Si StrumsVisualizer no está visible en la UI actual, montarlo aquí
+3. El panel debe verse compacto y lleno, no con espacio vacío
+
+---
+
+## TAREA 5 — Sistema de Temas (Theme Engine)
+
+**Crear** `/src/utils/themeEngine.ts` y `/src/hooks/useTheme.ts`
+
+Implementar 8 temas nuevos además del actual (Dark Industrial).
+Cada tema modifica variables CSS en `:root`.
+
+### Variables CSS a definir por tema:
+```css
+--bg-primary      /* fondo principal */
+--bg-secondary    /* fondo de paneles */
+--bg-tertiary     /* fondo de inputs/cards */
+--accent-primary  /* color de acción principal */
+--accent-secondary /* color secundario */
+--text-primary    /* texto principal */
+--text-secondary  /* texto secundario */
+--text-muted      /* texto apagado */
+--border-color    /* bordes de paneles */
+--status-active   /* indicadores ON */
+```
+
+### Los 8 temas a implementar:
+
+**1. DARK INDUSTRIAL** (el actual — no cambiar, solo documentar)
+```
+bg-primary: #0a0a0a
+bg-secondary: #111111  
+bg-tertiary: #1a1a1a
+accent-primary: #f97316  (naranja)
+accent-secondary: #22c55e (verde)
+text-primary: #ffffff
+text-secondary: #a1a1aa
+border-color: #27272a
+```
+
+**2. MIDNIGHT BLUE**
+```
+bg-primary: #030712
+bg-secondary: #0f172a
+bg-tertiary: #1e293b
+accent-primary: #3b82f6   (azul eléctrico)
+accent-secondary: #06b6d4 (cyan)
+text-primary: #f1f5f9
+text-secondary: #94a3b8
+border-color: #1e3a5f
+```
+
+**3. FOREST STUDIO**
+```
+bg-primary: #0a0f0a
+bg-secondary: #0f1a0f
+bg-tertiary: #1a2e1a
+accent-primary: #4ade80   (verde lima)
+accent-secondary: #a3e635 (amarillo verdoso)
+text-primary: #f0fdf4
+text-secondary: #86efac
+border-color: #166534
+```
+
+**4. SYNTHWAVE NEON**
+```
+bg-primary: #0d0015
+bg-secondary: #1a0030
+bg-tertiary: #2d0050
+accent-primary: #e879f9   (magenta)
+accent-secondary: #06b6d4 (cyan)
+text-primary: #fdf4ff
+text-secondary: #d946ef
+border-color: #7c3aed
+```
+
+**5. AMBER ANALOG**
+```
+bg-primary: #0c0800
+bg-secondary: #1a1200
+bg-tertiary: #2e1f00
+accent-primary: #f59e0b   (ámbar)
+accent-secondary: #fbbf24 (dorado)
+text-primary: #fffbeb
+text-secondary: #fcd34d
+border-color: #92400e
+```
+
+**6. MINIMAL LIGHT** (el que ya existe como "minimal")
+```
+bg-primary: #f8fafc
+bg-secondary: #ffffff
+bg-tertiary: #f1f5f9
+accent-primary: #1d4ed8   (azul oscuro)
+accent-secondary: #059669 (verde oscuro)
+text-primary: #0f172a
+text-secondary: #475569
+border-color: #e2e8f0
+```
+
+**7. BLOOD RED**
+```
+bg-primary: #0a0000
+bg-secondary: #1a0000
+bg-tertiary: #2e0000
+accent-primary: #ef4444   (rojo)
+accent-secondary: #f97316 (naranja)
+text-primary: #fff1f2
+text-secondary: #fca5a5
+border-color: #7f1d1d
+```
+
+**8. SLATE PRO**
+```
+bg-primary: #0f0f11
+bg-secondary: #18181b
+bg-tertiary: #27272a
+accent-primary: #a78bfa   (violeta)
+accent-secondary: #818cf8 (índigo)
+text-primary: #fafafa
+text-secondary: #a1a1aa
+border-color: #3f3f46
+```
+
+**9. ARCTIC**
+```
+bg-primary: #f0f4f8
+bg-secondary: #e2e8f0
+bg-tertiary: #cbd5e1
+accent-primary: #0891b2   (cyan oscuro)
+accent-secondary: #0284c7 (azul)
+text-primary: #0f172a
+text-secondary: #334155
+border-color: #94a3b8
+```
+
+### UI del selector de temas:
+
+En el header de Acordify (barra superior), añadir a la derecha:
+
+```
+[ THEME: DARK INDUSTRIAL ▾ ]
+```
+
+Al hacer click abre un dropdown con todos los temas.
+Cada opción muestra:
+- Un rectángulo de color con los 3 bg + el accent
+- El nombre del tema
+- Al hover: preview instantáneo (aplicar tema sin confirmar)
+- Al click: aplicar permanentemente
+
+Guardar tema seleccionado en localStorage: `acordify_theme`
+Cargar al iniciar la app.
+
+### Implementación técnica:
+
+En `index.css` o `App.tsx`, los colores de Tailwind deben
+referenciar las CSS variables. Añadir al `tailwind.config`:
+```js
+theme: {
+  extend: {
+    colors: {
+      'bg-primary': 'var(--bg-primary)',
+      'bg-secondary': 'var(--bg-secondary)',
+      'bg-tertiary': 'var(--bg-tertiary)',
+      'accent-primary': 'var(--accent-primary)',
+      'accent-secondary': 'var(--accent-secondary)',
+    }
+  }
+}
+```
+
+Luego migrar los colores hardcoded en componentes a estas variables.
+Prioridad de migración:
+1. Fondos de paneles (bg-[#111], bg-[#1a1a1a])
+2. Bordes (border-[#27272a])
+3. Textos secundarios (text-zinc-500, text-zinc-400)
+4. NO migrar naranja del botón GENERAR (es brand color fijo)
+5. NO migrar verde de DICT SYNCED (es indicador de estado fijo)
+
+---
+
+## TAREA 6 — Fix: Collapse con PanelWrapper estandarizado
+
+**Crear** `/src/components/PanelWrapper.tsx`:
+
+```typescript
+interface PanelWrapperProps {
+  id: string
+  title: string          // e.g. "CONTROL PANEL"
+  subtitle: string       // e.g. "MOOD CHASSIS SELECT"
+  defaultExpanded?: boolean
+  children: React.ReactNode
+  headerExtras?: React.ReactNode  // para el LED, SYS.PARSED_CHORDS.TXT etc
+}
+```
+
+Comportamiento:
+- Click en `[ BYPASS ]` → colapsa/expande con animación
+- Collapsed: solo header visible, height ~40px
+- Expanded: header + children
+- Animación: `transition-all duration-200`
+- Estado persiste en localStorage key `acordify_panels_state`
+- `[ BYPASS ]` rota su `]` a `[` cuando está colapsado
+  (indicador visual: `[ BYPASS ]` → `[ BYPASSED ]`)
+
+Reemplazar los headers manuales de estos paneles con PanelWrapper:
+- `[CONTROL PANEL] // MOOD CHASSIS SELECT`
+- `[LYRICS] // ADVANCED PARAMETERS`
+- `[LOOKUP] // SONG SEARCH`
+- `[MONITOR] // SIGNAL PROGRESSION`
+- `[RECEIVER] // SOLO SCALE VISUALIZER`
+- `[SHEET] // CHORDPRO NOTEBOOK`
+- `[PITCH] // SMART TRANSPOSER`
+- `[VAULT] // SESSION STORAGE`
+
+---
+
+## TAREA 7 — Fix: Sequencer Control visual
+
+**Problema:** El `[SEQUENCER CONTROL] LOOP PLAYER & WRITER DECK`
+se ve con texto apilado verticalmente y botones desalineados.
+
+**Fix en el componente de Sequencer:**
+1. El label "LOOP PLAYER & WRITER DECK" debe ser una sola línea
+   en pequeño a la izquierda: `text-xs text-zinc-500`
+2. Los botones deben estar en una sola fila horizontal:
+   `[ PLAY LOOP ] [ CONTINUAR LETRA ] [ EXPORT JSON ] [ IMPORT JSON ]`
+3. Ancho de botones: `flex-1` para que se distribuyan igual
+4. El label del sequencer queda arriba de los botones, no al lado
+
+---
+
+## TAREA 8 — Fix: ChordPro Notebook — modo edición
+
+**En el ChordPro Notebook**, el botón `[ MODO EDICION ]` ya existe.
+
+Completar su funcionalidad:
+1. En modo edición: el contenido debe ser un `<textarea>` editable
+   con las mismas clases de fuente monoespaciada
+2. Syntax highlight en tiempo real (usando un overlay div):
+   - Texto entre `[` y `]` → color naranja
+   - Texto normal → color blanco
+3. Al salir de modo edición (click `[ MODO LECTURA ]`):
+   - Parsear el contenido editado como ChordPro
+   - Actualizar el estado de la app con el nuevo contenido
+4. Botón `[ ASISTIR CON IA ]` visible solo en modo edición:
+   - Llama al servicio de letras con el texto actual como contexto
+   - Añade sugerencia al FINAL del texto, no reemplaza
+5. Autosave en localStorage cada 30 segundos en modo edición
+
+---
+
+## TAREA 9 — Mejoras de UX pequeñas (polish)
+
+**9a. Toast notifications:**
+Crear `/src/components/Toast.tsx` — sistema de notificaciones:
+- Aparece esquina inferior derecha
+- Auto-desaparece en 3 segundos
+- Tipos: success (verde), error (rojo), warning (amarillo), info (azul)
+- Máximo 3 toasts visibles a la vez
+- Usarlo para: "✓ Sesión guardada", "✓ Letra generada", "✗ Error al buscar"
+
+**9b. Loading states:**
+Todos los botones que hacen llamadas a API deben:
+- Deshabilitarse durante la carga
+- Mostrar cursor `cursor-not-allowed` cuando están disabled
+- Mostrar texto de loading: `[ GENERANDO... ]` con animación
+  de cursor parpadeante usando CSS `animate-pulse`
+
+**9c. Header status bar:**
+La barra superior `REC STANDBY · INPUT: LINE/MIC · OUT: MONO · 44.1 KHZ`
+debe mostrar información real:
+- Reemplazar "REC STANDBY" con indicador del tema activo: `THEME: DARK`
+- Reemplazar "44.1 KHZ" con el sample rate real de Tone.js:
+  `Tone.context.sampleRate / 1000 + ' KHZ'`
+- "INPUT: LINE/MIC" puede quedar estático (es decorativo)
+
+**9d. RACK status bar:**
+`RACK: 01A PATCH: COLD-STATE STATUS: READY` al fondo:
+- STATUS cambia a `ACTIVE` cuando hay audio reproduciéndose
+- STATUS cambia a `GENERATING` cuando hay un API call en curso
+- Parpadea el punto verde cuando STATUS es ACTIVE
+
+---
+
+## TAREA 10 — Vista Móvil básica (responsive)
+
+Como primer paso antes de la vista móvil dedicada completa:
+
+1. En pantallas < 768px el grid de 4 columnas colapsa a 1 columna
+2. El orden de paneles en móvil (de arriba a abajo):
+   - `[SHEET] // CHORDPRO NOTEBOOK` (primero y más grande)
+   - `[SEQUENCER CONTROL]` (play, export)
+   - `[CONTROL PANEL] // MOOD CHASSIS SELECT` (colapsado por default)
+   - `[LYRICS] // ADVANCED PARAMETERS` (colapsado por default)
+   - `[PITCH] // SMART TRANSPOSER`
+   - `[SESSION] // PRACTICE ENGINE` con Live Session
+   - `[MONITOR] // SIGNAL PROGRESSION` (colapsado por default)
+   - `[RECEIVER] // SOLO SCALE VISUALIZER` (colapsado por default)
+   - `[VAULT] // SESSION STORAGE` (colapsado por default)
+   - `[LOOKUP] // SONG SEARCH` (colapsado por default)
+
+3. En el ChordPro Notebook en móvil:
+   - `font-size: 18px` mínimo para los acordes
+   - `font-size: 16px` mínimo para el texto de letras
+   - Padding generoso: `p-6`
+
+4. Los botones en móvil: `min-h-[44px]` para touch targets correctos
+
+5. El header en móvil:
+   - Solo mostrar "ACORDIFY" y el indicador de mood activo
+   - Ocultar el status bar de REC/INPUT/OUT/KHZ
+
+---
+
+## VERIFICACIÓN FINAL
+
+Después de completar todas las tareas:
+
+1. Correr `npm run build` — debe compilar sin errores ni warnings
+2. Verificar que los 9 temas funcionan y cambian la UI
+3. Verificar que Song Lookup encuentra al menos una canción conocida
+4. Verificar que el modo edición del ChordPro guarda cambios
+5. Verificar que los paneles colapsan y su estado persiste al recargar
+6. Verificar en viewport 375px que la UI es usable en móvil
+
+---
+
+*ACORDIFY CORP. © 2026 — Autopilot Session*
+*Generado: Mayo 27, 2026 — 03:22 AM*

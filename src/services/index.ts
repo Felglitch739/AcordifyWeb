@@ -48,3 +48,5 @@ export type {
 	LyricsLine,
 	LyricsResult,
 } from './lyricsService';
+export { lookupSong } from './songLookupService';
+export type { SongLookupResult } from './songLookupService';

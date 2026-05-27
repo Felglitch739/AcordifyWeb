@@ -7,6 +7,7 @@ const baseParams: LyricsParams = {
   mode: 'major',
   bpm: 92,
   mood: 'Pop Acústico Relajado',
+  genre: 'indie pop',
   rhymeScheme: 'ABAB',
   emotionalMood: 60,
   narrativePerson: '1ra',

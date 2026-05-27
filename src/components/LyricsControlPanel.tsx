@@ -8,6 +8,7 @@ interface LyricsControlPanelProps {
   narrativePerson: LyricsParams['narrativePerson'];
   metaphorDensity: LyricsParams['metaphorDensity'];
   thematicConcept: string;
+  genre: string;
   language: LyricsParams['language'];
   linesToGenerate: LyricsParams['linesToGenerate'];
   isGenerating?: boolean;
@@ -18,6 +19,7 @@ interface LyricsControlPanelProps {
   onNarrativePersonChange: (value: LyricsParams['narrativePerson']) => void;
   onMetaphorDensityChange: (value: LyricsParams['metaphorDensity']) => void;
   onThematicConceptChange: (value: string) => void;
+  onGenreChange: (value: string) => void;
   onLanguageChange: (value: LyricsParams['language']) => void;
   onLinesToGenerateChange: (value: LyricsParams['linesToGenerate']) => void;
   onGenerate: () => void;
@@ -83,6 +85,7 @@ export const LyricsControlPanel: React.FC<LyricsControlPanelProps> = ({
   narrativePerson,
   metaphorDensity,
   thematicConcept,
+  genre,
   language,
   linesToGenerate,
   isGenerating = false,
@@ -93,6 +96,7 @@ export const LyricsControlPanel: React.FC<LyricsControlPanelProps> = ({
   onNarrativePersonChange,
   onMetaphorDensityChange,
   onThematicConceptChange,
+  onGenreChange,
   onLanguageChange,
   onLinesToGenerateChange,
   onGenerate,
@@ -239,6 +243,28 @@ export const LyricsControlPanel: React.FC<LyricsControlPanelProps> = ({
             SUGERENCIA // Usa un concepto más concreto para que la letra siga ese tema con más precisión.
           </p>
         )}
+      </div>
+
+      <div className="space-y-2">
+        <div className="flex items-center justify-between">
+          <label className="text-2xs font-mono font-bold tracking-wider text-zinc-400 uppercase">
+            [GENERO] // ESTILO (OPCIONAL)
+          </label>
+          <span className="text-[9px] font-mono text-zinc-600 uppercase">40 MAX</span>
+        </div>
+        <div className="relative">
+          <input
+            type="text"
+            maxLength={40}
+            value={genre}
+            onChange={(event) => onGenreChange(event.target.value)}
+            placeholder="ej: indie rock, bolero, synthwave..."
+            className="w-full border border-zinc-700 bg-zinc-950 px-3 py-2 pr-12 font-mono text-[11px] text-stone-200 placeholder:text-zinc-600 outline-none transition-colors focus:border-orange-500"
+          />
+          <span className="pointer-events-none absolute bottom-2 right-3 text-[9px] font-mono text-zinc-500">
+            {genre.length}/40
+          </span>
+        </div>
       </div>
 
       <div className="space-y-2">

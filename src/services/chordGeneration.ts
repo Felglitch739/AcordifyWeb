@@ -5,6 +5,7 @@ export type ChordComplexity = 'basic' | 'intermediate' | 'advanced';
 
 export interface ChordGenerationParams {
   mood: string;
+  genre?: string;
   keyRoot: string;
   mode: ChordMode;
   bpm: number;
@@ -65,6 +66,12 @@ const MOOD_HINTS: Record<string, string> = {
   'Pop Acoustic Relaxed': 'open voicings, add9, suspended resolutions',
   'Neo-Soul Warm': 'maj9/min9, chromatic approach chords, gentle secondary dominants',
   'Cinematic Ambient': 'pedal tones, quartal voicings, modal interchange, slow release',
+  'Neo-Soul Cálido': 'maj9/min9, chromatic approach chords, gentle secondary dominants',
+  'Lo-Fi Chill': 'soft seventh chords, vinyl haze colors, relaxed ii-V',
+  'Synthwave Nocturno': 'minor keys, sus2/sus4, bVI-bVII lifts',
+  'Bossa Nova Suave': 'jazz extensions, ii-V-I, soft syncopation',
+  'Cumbia Urbana': 'simple minor loop, bVII lift, percussive pulse',
+  'Folk Íntimo': 'open voicings, add9, simple suspensions',
 };
 
 function stripMarkdownFences(content: string): string {
@@ -116,6 +123,7 @@ export function buildChordPrompt(params: ChordGenerationParams): {
 
   const userPrompt = `Generate a chord progression.
 Mood: ${params.mood}
+Genre: ${params.genre ?? 'none'}
 Key: ${params.keyRoot} ${params.mode}
 BPM: ${params.bpm}
 Complexity: ${params.complexity}

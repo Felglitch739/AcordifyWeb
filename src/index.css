@@ -182,4 +182,29 @@
     font-variant-numeric: tabular-nums;
     font-feature-settings: "tnum" 1;
   }
+
+  /* Minimal theme overrides (light, flat, sharp) */
+  .theme-minimal {
+    background-color: #f5f5f4;
+    color: #111827;
+  }
+
+  .theme-minimal .bg-zinc-900 { background-color: #f5f5f4; }
+  .theme-minimal .bg-zinc-950 { background-color: #ffffff; }
+  .theme-minimal .bg-zinc-800 { background-color: #f2f2f1; }
+  .theme-minimal .bg-zinc-700 { background-color: #e5e7eb; }
+
+  .theme-minimal .border-zinc-700 { border-color: #e5e7eb; }
+  .theme-minimal .border-zinc-800 { border-color: #e5e7eb; }
+  .theme-minimal .border-zinc-900 { border-color: #d1d5db; }
+
+  .theme-minimal .text-stone-200 { color: #111827; }
+  .theme-minimal .text-zinc-400 { color: #4b5563; }
+  .theme-minimal .text-zinc-500 { color: #6b7280; }
+  .theme-minimal .text-zinc-600 { color: #6b7280; }
+
+  .theme-minimal .shadow-md,
+  .theme-minimal .shadow-inner {
+    box-shadow: none;
+  }
 }

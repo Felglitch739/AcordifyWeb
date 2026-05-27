@@ -8,7 +8,7 @@ export interface SongConceptResponse {
  * Calls Azure OpenAI to generate a dynamic song concept based on a mood.
  * Expects VITE_AZURE_API_KEY and VITE_AZURE_ENDPOINT in .env.local
  */
-export async function generateSongConcept(mood: string): Promise<SongConceptResponse> {
+export async function generateSongConcept(mood: string, genre?: string): Promise<SongConceptResponse> {
   const apiKey = import.meta.env.VITE_AZURE_API_KEY;
   const endpoint = import.meta.env.VITE_AZURE_ENDPOINT;
 
@@ -45,7 +45,7 @@ Formato de Respuesta: Devuelve ÚNICAMENTE un objeto JSON plano, sin bloques de 
         model: "gpt-4o-mini",
         messages: [
           { role: 'system', content: systemPrompt },
-          { role: 'user', content: `Generate a song concept for the mood: "${mood}"` }
+          { role: 'user', content: `Generate a song concept for the mood: "${mood}"${genre ? ` and genre: "${genre}"` : ''}.` }
         ],
         temperature: 0.7,
         max_tokens: 300,

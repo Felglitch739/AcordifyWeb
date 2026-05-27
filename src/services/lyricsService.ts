@@ -6,6 +6,7 @@ export interface LyricsParams {
   mode: 'major' | 'minor';
   bpm: number;
   mood: string;
+  genre: string;
   rhymeScheme: 'ABAB' | 'AABB' | 'ABBA' | 'free';
   emotionalMood: number;
   narrativePerson: '1ra' | '2da' | '3ra';
@@ -29,7 +30,7 @@ export interface LyricsResult {
   chordProOutput: string;
 }
 
-const SYSTEM_PROMPT = `You are a senior lyric co-writer for Acordify, an AI music tool for songwriters. Write lyrics that feel musical, fresh, and emotionally coherent.
+const SYSTEM_PROMPT = `You are a senior lyric co-writer for Acordify, an AI music tool for songwriters. Write lyrics that feel musical, fresh, emotionally coherent, and aligned to the requested genre.
 
 OUTPUT RULES:
 - Return ONLY valid JSON. No markdown fences. No explanation.
@@ -49,6 +50,7 @@ CREATIVE RULES:
 
 const USER_PROMPT_TEMPLATE = `=== MUSICAL CONTEXT ===
 Mood: {{MOOD}}
+Genre: {{GENRE}}
 Key: {{KEY_ROOT}} {{MODE}}
 BPM: {{BPM}}
 Active chords: {{ACTIVE_CHORDS}}
@@ -194,6 +196,7 @@ function validateChordSymbol(symbol: string): void {
 export function buildLyricsPrompt(params: LyricsParams): { systemPrompt: string; userPrompt: string } {
   const userPrompt = USER_PROMPT_TEMPLATE
     .replace('{{MOOD}}', params.mood)
+    .replace('{{GENRE}}', params.genre.trim() || 'none')
     .replace('{{KEY_ROOT}}', params.keyRoot)
     .replace('{{MODE}}', params.mode)
     .replace('{{BPM}}', String(params.bpm))

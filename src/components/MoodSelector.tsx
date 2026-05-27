@@ -15,6 +15,12 @@ export const MoodSelector: React.FC<MoodSelectorProps> = ({ value, onChange, onB
     { id: 'Jazzy Melancólico', label: 'JAZZ MELANCOLICO', desc: 'Muted minor extensions & slow temp' },
     { id: 'Indie Rock Energético', label: 'INDIE ROCK ENERGETICO', desc: 'Overdriven drive, grit & raw power' },
     { id: 'Pop Acústico Relajado', label: 'POP ACUSTICO RELAJADO', desc: 'Warm open chords & bright textures' },
+    { id: 'Neo-Soul Cálido', label: 'NEO SOUL CALIDO', desc: 'Lush 9ths, silky voicings, late-night groove' },
+    { id: 'Lo-Fi Chill', label: 'LO-FI CHILL', desc: 'Dusty chords, mellow swing, soft edges' },
+    { id: 'Synthwave Nocturno', label: 'SYNTHWAVE NOCTURNO', desc: 'Retro pads, minor keys, neon drive' },
+    { id: 'Bossa Nova Suave', label: 'BOSSA NOVA SUAVE', desc: 'Syncopated sway, jazz colors, light touch' },
+    { id: 'Cumbia Urbana', label: 'CUMBIA URBANA', desc: 'Percussive pulse, festive minor vibes' },
+    { id: 'Folk Íntimo', label: 'FOLK INTIMO', desc: 'Acoustic warmth, storytelling focus' },
   ];
 
   const handleSelect = (id: string) => {
