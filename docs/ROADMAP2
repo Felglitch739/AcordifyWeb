@@ -18,6 +18,10 @@ Parámetros Avanzados Letras     ✅ Completo → /src/components/LyricsControlP
 Rasgueos Animados               ✅ Completo → /src/components/StrumsVisualizer.tsx
 Modo Sesión en Vivo             ✅ Completo → /src/hooks/useLiveSession.ts
 Export/Import JSON              ✅ Completo → /src/utils/sessionExporter.ts
+Layout fixes (items-start)      ✅ Completo → /src/App.tsx (layout tweaks)
+PanelWrapper + Collapse         ✅ Completo → /src/components/PanelWrapper.tsx
+Drag & Drop (dnd-kit)           ✅ Completo → src/hooks/useWorkspaceLayout.ts + App.tsx
+IndexedDB Persistence (idb)     ✅ Completo → /src/services/storageService.ts
 ```
 
 ---
@@ -88,7 +92,7 @@ Incluye progresión, transposición, BPM, mood, letras y metadatos.
 
 ---
 
-### 08 — Layout Fix + items-start 🔨 SIGUIENTE
+### 08 — Layout Fix + items-start ✅
 **Archivo:** `/docs/prompts/08_layout_fix.txt`
 **Destino:** Layout principal en `App.tsx` o archivo de layout raíz
 **Descripción:** Corrección del grid principal para que los paneles
@@ -106,7 +110,7 @@ tomen solo la altura que necesitan, sin estirarse.
 
 ---
 
-### 09 — Collapse Estandarizado + Persistencia 🔨
+### 09 — Collapse Estandarizado + Persistencia ✅
 **Archivo:** `/docs/prompts/09_collapse_panels.txt`
 **Destino:** `/src/components/PanelWrapper.tsx` (nuevo componente base)
 **Descripción:** Todos los paneles con `[ BYPASS ]` deben poder
@@ -131,7 +135,7 @@ colapsarse/expandirse de forma estándar. Estado persiste en localStorage.
 
 ---
 
-### 10 — Drag & Drop de Paneles (dnd-kit) 🔨
+### 10 — Drag & Drop de Paneles (dnd-kit) ✅
 **Archivo:** `/docs/prompts/10_drag_drop.txt`
 **Destino:** `/src/hooks/useWorkspaceLayout.ts` + modificaciones en layout
 **Descripción:** El usuario puede reordenar los paneles arrastrándolos.
@@ -279,7 +283,7 @@ No es la vista de escritorio "achicada" — es un diseño propio.
 
 ---
 
-### 14 — Persistencia Local (IndexedDB) 🔨
+### 14 — Persistencia Local (IndexedDB) ✅
 **Archivo:** `/docs/prompts/14_indexeddb.txt`
 **Destino:** `/src/services/storageService.ts` + `/src/hooks/useStorage.ts`
 **Descripción:** Almacenamiento local de sesiones en el browser del
