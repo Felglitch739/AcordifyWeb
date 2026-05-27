@@ -1,5 +1,6 @@
 import React from 'react';
 import type { StrumState } from '../utils/strumPatterns';
+import { PanelWrapper } from './PanelWrapper';
 
 interface Props {
   state: StrumState;
@@ -20,15 +21,17 @@ export const StrumsVisualizer: React.FC<Props> = ({ state, onPrevPattern, onNext
   const { pattern, currentBeat, currentBar, isPlaying } = state;
 
   return (
-    <div className="bg-zinc-900 border border-zinc-700 p-3 rounded-sm shadow-md select-none">
-      <div className="flex items-center justify-between mb-2">
+    <PanelWrapper
+      className="bg-zinc-900"
+      onBypass={onBypass}
+      title={(
         <div className="font-mono text-xs text-stone-200">[STRUMS] // VISUALIZADOR DE RASGUEO</div>
-        <div className="flex items-center space-x-2">
-          <button className="text-2xs font-mono border border-zinc-700 px-2 py-1" onClick={onBypass}>[ BYPASS ]</button>
-          <div className="font-mono text-2xs text-zinc-400">BAR {String(currentBar).padStart(3, '0')}</div>
-        </div>
-      </div>
-
+      )}
+      rightSlot={(
+        <div className="font-mono text-2xs text-zinc-400">BAR {String(currentBar).padStart(3, '0')}</div>
+      )}
+      contentClassName="p-3"
+    >
       <div className="overflow-x-auto">
         <div className="flex items-center space-x-2">
           {pattern.beats.map((b, idx) => {
@@ -59,7 +62,7 @@ export const StrumsVisualizer: React.FC<Props> = ({ state, onPrevPattern, onNext
           <button className="px-2 py-1 font-mono text-2xs border border-zinc-700" onClick={onNextPattern}>SIGUIENTE PATRÓN ▶</button>
         </div>
       </div>
-    </div>
+    </PanelWrapper>
   );
 };
 

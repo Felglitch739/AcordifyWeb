@@ -1,178 +1,268 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import * as Tone from 'tone';
+import {
+  beatToBarAndPosition,
+  buildChordSchedule,
+  getActiveChordAtBeat,
+  getTotalBeats,
+  type ChordSlot,
+  type LiveSessionConfig,
+  type LiveSessionState,
+} from '../utils';
 
 export type ChordDurationBars = 1 | 2;
 
 export interface UseLiveSessionOptions {
   chords: string[];
-  lyrics: string;
   bpm: number;
 }
 
 export interface UseLiveSessionResult {
-  isLiveSessionActive: boolean;
-  activeChordIndex: number;
-  activeLineIndex: number;
-  currentMeasure: number;
-  chordDurationsBars: ChordDurationBars[];
-  enableLiveSession: () => Promise<void>;
-  disableLiveSession: (options?: { stopTransport?: boolean }) => void;
-  toggleLiveSession: () => Promise<void>;
-  setChordDurationBars: (index: number, bars: ChordDurationBars) => void;
+  state: LiveSessionState;
+  startLive: () => Promise<void>;
+  stopLive: () => void;
+  setChordDuration: (chordIndex: number, bars: ChordDurationBars) => void;
+  isLive: boolean;
 }
 
-type LiveSessionState = {
-  activeChordIndex: number;
-  activeLineIndex: number;
-  currentMeasure: number;
-  measuresIntoCurrentChord: number;
-};
+function createDurationMap(chords: string[]): Record<number, ChordDurationBars> {
+  return chords.reduce<Record<number, ChordDurationBars>>((accumulator, _chord, index) => {
+    accumulator[index] = 1;
+    return accumulator;
+  }, {});
+}
+
+function createInitialState(chordSlots: ChordSlot[] = []): LiveSessionState {
+  return {
+    isLive: false,
+    isPlaying: false,
+    activeChordIndex: 0,
+    activeChord: '',
+    currentBar: 1,
+    currentBeat: 1,
+    totalBars: 0,
+    chordSlots,
+  };
+}
+
+function buildLiveConfig(
+  chords: string[],
+  durationPerChord: Record<number, ChordDurationBars>,
+  bpm: number,
+): LiveSessionConfig {
+  return {
+    chords,
+    durationPerChord,
+    bpm,
+    timeSignature: 4,
+  };
+}
+
+function isAtBarBoundary(beatPosition: number): boolean {
+  const roundedBeat = Math.round(beatPosition);
+  return Math.abs(beatPosition - roundedBeat) < 0.001 && roundedBeat % 4 === 0;
+}
 
 export function useLiveSession(options: UseLiveSessionOptions): UseLiveSessionResult {
-  const [isLiveSessionActive, setIsLiveSessionActive] = useState(false);
-  const [activeChordIndex, setActiveChordIndex] = useState(0);
-  const [activeLineIndex, setActiveLineIndex] = useState(0);
-  const [currentMeasure, setCurrentMeasure] = useState(0);
-  const [durationOverrides, setDurationOverrides] = useState<Partial<Record<number, ChordDurationBars>>>({});
-
-  const chordDurationsBars = useMemo(
-    () =>
-      Array.from({ length: options.chords.length }, (_, index) => {
-        const duration = durationOverrides[index];
-        return duration === 2 ? 2 : 1;
-      }) as ChordDurationBars[],
-    [durationOverrides, options.chords.length],
+  const [durationPerChord, setDurationPerChordState] = useState<Record<number, ChordDurationBars>>(() =>
+    createDurationMap(options.chords),
   );
+  const [state, setState] = useState<LiveSessionState>(() => createInitialState());
 
   const scheduleIdRef = useRef<number | null>(null);
-  const transportStartedByLiveRef = useRef(false);
-  const sessionStateRef = useRef<LiveSessionState>({
-    activeChordIndex: 0,
-    activeLineIndex: 0,
-    currentMeasure: 0,
-    measuresIntoCurrentChord: 0,
-  });
+  const startedTransportByHookRef = useRef(false);
+  const latestBpmRef = useRef(options.bpm);
+  const latestChordsRef = useRef(options.chords);
+  const latestDurationPerChordRef = useRef(durationPerChord);
+  const activeScheduleRef = useRef<ChordSlot[]>([]);
+  const pendingDurationUpdateRef = useRef(false);
+  const isLiveRef = useRef(false);
 
-  const lyricsLineCount = useMemo(() => {
-    const lines = options.lyrics.split('\n');
-    return lines.length > 0 ? lines.length : 1;
-  }, [options.lyrics]);
+  const buildStateFromBeat = useCallback((beat: number, chordSlots: ChordSlot[]): LiveSessionState => {
+    const totalBeats = getTotalBeats(chordSlots);
+    const activeSlot = getActiveChordAtBeat(beat, chordSlots);
+    const { bar, beatInBar } = beatToBarAndPosition(beat, totalBeats);
 
-  useEffect(() => {
-    Tone.Transport.bpm.value = options.bpm;
-  }, [options.bpm]);
+    return {
+      isLive: true,
+      isPlaying: true,
+      activeChordIndex: activeSlot.index,
+      activeChord: activeSlot.chord,
+      currentBar: bar,
+      currentBeat: beatInBar,
+      totalBars: totalBeats > 0 ? totalBeats / 4 : 0,
+      chordSlots,
+    };
+  }, []);
 
-  const clearSchedule = useCallback(() => {
+  const rebuildSchedule = useCallback((durationMap: Record<number, ChordDurationBars>) => {
+    const chordSlots = buildChordSchedule(
+      buildLiveConfig(latestChordsRef.current, durationMap, latestBpmRef.current),
+    );
+
+    activeScheduleRef.current = chordSlots;
+    return chordSlots;
+  }, []);
+
+  const clearScheduledRepeat = useCallback(() => {
     if (scheduleIdRef.current !== null) {
       Tone.Transport.clear(scheduleIdRef.current);
       scheduleIdRef.current = null;
     }
   }, []);
 
-  const syncReactState = useCallback(() => {
-    const state = sessionStateRef.current;
-    setActiveChordIndex(state.activeChordIndex);
-    setActiveLineIndex(state.activeLineIndex);
-    setCurrentMeasure(state.currentMeasure);
-  }, []);
-
-  const advanceSession = useCallback(() => {
-    const state = sessionStateRef.current;
-    const activeDuration = chordDurationsBars[state.activeChordIndex] ?? 1;
-
-    if (state.measuresIntoCurrentChord >= activeDuration) {
-      state.activeChordIndex = options.chords.length > 0 ? (state.activeChordIndex + 1) % options.chords.length : 0;
-      state.measuresIntoCurrentChord = 0;
-    }
-
-    state.currentMeasure += 1;
-    state.activeLineIndex = lyricsLineCount > 0 ? state.activeChordIndex % lyricsLineCount : 0;
-    state.measuresIntoCurrentChord += 1;
-
-    syncReactState();
-  }, [chordDurationsBars, lyricsLineCount, options.chords.length, syncReactState]);
-
-  const enableLiveSession = useCallback(async () => {
-    if (isLiveSessionActive) {
+  const syncFromTransport = useCallback(() => {
+    const chordSlots = activeScheduleRef.current;
+    if (chordSlots.length === 0) {
       return;
     }
 
-    clearSchedule();
+    const positionSeconds = Tone.Transport.toSeconds(Tone.Transport.position);
+    const beatPosition = positionSeconds * (latestBpmRef.current / 60);
 
-    if (Tone.Transport.state !== 'started') {
-      await Tone.start();
-      Tone.Transport.start();
-      transportStartedByLiveRef.current = true;
-    } else {
-      transportStartedByLiveRef.current = false;
+    if (pendingDurationUpdateRef.current && isAtBarBoundary(beatPosition)) {
+      pendingDurationUpdateRef.current = false;
+      const nextSchedule = buildChordSchedule(
+        buildLiveConfig(latestChordsRef.current, latestDurationPerChordRef.current, latestBpmRef.current),
+      );
+
+      activeScheduleRef.current = nextSchedule;
+      setState(() => buildStateFromBeat(beatPosition, nextSchedule));
+      return;
     }
 
-    sessionStateRef.current = {
-      activeChordIndex: 0,
-      activeLineIndex: 0,
-      currentMeasure: 0,
-      measuresIntoCurrentChord: 0,
-    };
-    syncReactState();
+    setState(() => buildStateFromBeat(beatPosition, chordSlots));
+  }, [buildStateFromBeat]);
+
+  useEffect(() => {
+    latestBpmRef.current = options.bpm;
+    Tone.Transport.bpm.value = options.bpm;
+  }, [options.bpm]);
+
+  useEffect(() => {
+    latestChordsRef.current = options.chords;
+  }, [options.chords]);
+
+  useEffect(() => {
+    latestDurationPerChordRef.current = durationPerChord;
+  }, [durationPerChord]);
+
+  useEffect(() => {
+    isLiveRef.current = state.isLive;
+  }, [state.isLive]);
+
+  useEffect(() => {
+    if (options.chords.length === 0) {
+      pendingDurationUpdateRef.current = false;
+      activeScheduleRef.current = [];
+      setDurationPerChordState({});
+      setState(createInitialState());
+      clearScheduledRepeat();
+      return;
+    }
+
+    setDurationPerChordState((previous) => {
+      const shouldResetDurations = Object.keys(previous).length !== options.chords.length;
+      const next = shouldResetDurations ? createDurationMap(options.chords) : previous;
+
+      if (shouldResetDurations) {
+        latestDurationPerChordRef.current = next;
+      }
+
+      const nextSchedule = buildChordSchedule(buildLiveConfig(options.chords, next, options.bpm));
+      activeScheduleRef.current = nextSchedule;
+
+      if (isLiveRef.current) {
+        pendingDurationUpdateRef.current = true;
+      } else {
+        setState(createInitialState(nextSchedule));
+      }
+
+      return next;
+    });
+  }, [clearScheduledRepeat, options.bpm, options.chords]);
+
+  const startLive = useCallback(async () => {
+    if (options.chords.length === 0) {
+      return;
+    }
+
+    clearScheduledRepeat();
+
+    await Tone.start();
+
+    if (Tone.Transport.state !== 'started') {
+      Tone.Transport.start();
+      startedTransportByHookRef.current = true;
+    } else {
+      startedTransportByHookRef.current = false;
+    }
+
+    const chordSlots = rebuildSchedule(latestDurationPerChordRef.current);
+    const initialBeat = Tone.Transport.toSeconds(Tone.Transport.position) * (latestBpmRef.current / 60);
+
+    setState(buildStateFromBeat(initialBeat, chordSlots));
 
     const repeatId = Tone.Transport.scheduleRepeat((time) => {
       Tone.Draw.schedule(() => {
-        advanceSession();
+        syncFromTransport();
       }, time);
-    }, '1m');
+    }, '4n');
 
     scheduleIdRef.current = repeatId;
-    setIsLiveSessionActive(true);
-  }, [advanceSession, clearSchedule, isLiveSessionActive, syncReactState]);
+  }, [buildStateFromBeat, clearScheduledRepeat, options.chords.length, rebuildSchedule, syncFromTransport]);
 
-  const disableLiveSession = useCallback(
-    (options?: { stopTransport?: boolean }) => {
-      clearSchedule();
-      setIsLiveSessionActive(false);
-      transportStartedByLiveRef.current = false;
+  const stopLive = useCallback(() => {
+    clearScheduledRepeat();
+    pendingDurationUpdateRef.current = false;
+    const chordSlots = activeScheduleRef.current.length > 0
+      ? activeScheduleRef.current
+      : buildChordSchedule(buildLiveConfig(latestChordsRef.current, latestDurationPerChordRef.current, latestBpmRef.current));
 
-      if (options?.stopTransport && Tone.Transport.state === 'started') {
-        Tone.Transport.stop();
+    activeScheduleRef.current = chordSlots;
+    setState(createInitialState(chordSlots));
+  }, [clearScheduledRepeat]);
+
+  const setChordDuration = useCallback((chordIndex: number, bars: ChordDurationBars) => {
+    setDurationPerChordState((previous) => {
+      const next = {
+        ...previous,
+        [chordIndex]: bars,
+      };
+
+      latestDurationPerChordRef.current = next;
+
+      if (isLiveRef.current) {
+        pendingDurationUpdateRef.current = true;
+      } else {
+        const nextSchedule = buildChordSchedule(
+          buildLiveConfig(latestChordsRef.current, next, latestBpmRef.current),
+        );
+        activeScheduleRef.current = nextSchedule;
+        setState(createInitialState(nextSchedule));
       }
-    },
-    [clearSchedule],
-  );
 
-  const toggleLiveSession = useCallback(async () => {
-    if (isLiveSessionActive) {
-      disableLiveSession({ stopTransport: transportStartedByLiveRef.current });
-      return;
-    }
-
-    await enableLiveSession();
-  }, [disableLiveSession, enableLiveSession, isLiveSessionActive]);
-
-  const setChordDurationBars = useCallback((index: number, bars: ChordDurationBars) => {
-    setDurationOverrides((previous) => ({
-      ...previous,
-      [index]: bars,
-    }));
+      return next;
+    });
   }, []);
 
   useEffect(() => {
     return () => {
-      clearSchedule();
+      clearScheduledRepeat();
 
-      if (transportStartedByLiveRef.current && Tone.Transport.state === 'started') {
+      if (startedTransportByHookRef.current && Tone.Transport.state === 'started') {
         Tone.Transport.stop();
       }
+
+      Tone.Transport.cancel(0);
     };
-  }, [clearSchedule]);
+  }, [clearScheduledRepeat]);
 
   return {
-    isLiveSessionActive,
-    activeChordIndex,
-    activeLineIndex,
-    currentMeasure,
-    chordDurationsBars,
-    enableLiveSession,
-    disableLiveSession,
-    toggleLiveSession,
-    setChordDurationBars,
+    state,
+    startLive,
+    stopLive,
+    setChordDuration,
+    isLive: state.isLive,
   };
 }

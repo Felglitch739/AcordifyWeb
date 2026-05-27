@@ -1,25 +1,36 @@
 import React from 'react';
 import type { ChordDurationBars } from '../hooks/useLiveSession';
+import type { LiveSessionState } from '../utils';
 
 interface LiveSessionOverlayProps {
-  isActive: boolean;
-  activeChord: string;
-  activeChordIndex: number;
-  currentMeasure: number;
-  chordDurationsBars: ChordDurationBars[];
+  state: LiveSessionState;
   onToggle: () => void;
-  onSetChordDurationBars: (index: number, bars: ChordDurationBars) => void;
+  onSetChordDuration: (index: number, bars: ChordDurationBars) => void;
 }
 
 export const LiveSessionOverlay: React.FC<LiveSessionOverlayProps> = ({
-  isActive,
-  activeChord,
-  activeChordIndex,
-  currentMeasure,
-  chordDurationsBars,
+  state,
   onToggle,
-  onSetChordDurationBars,
+  onSetChordDuration,
 }) => {
+  const [pulse, setPulse] = React.useState(false);
+
+  React.useEffect(() => {
+    if (!state.activeChord) {
+      setPulse(false);
+      return;
+    }
+
+    setPulse(true);
+    const timeoutId = window.setTimeout(() => {
+      setPulse(false);
+    }, 200);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [state.activeChord]);
+
   return (
     <div className="w-full border border-zinc-700 bg-zinc-950/95 shadow-[0_0_30px_rgba(0,0,0,0.25)] backdrop-blur-sm">
       <div className="flex items-center justify-between border-b border-zinc-800 px-3 py-2">
@@ -30,12 +41,12 @@ export const LiveSessionOverlay: React.FC<LiveSessionOverlayProps> = ({
           type="button"
           onClick={onToggle}
           className={`border px-2 py-1 text-[9px] font-mono uppercase tracking-[0.2em] transition-colors ${
-            isActive
-              ? 'border-emerald-500 text-emerald-400 hover:bg-emerald-500 hover:text-black'
-              : 'border-zinc-700 text-zinc-400 hover:border-orange-500 hover:text-orange-400'
+            state.isLive
+              ? 'border-red-500 text-red-400 hover:bg-red-500 hover:text-black'
+              : 'border-emerald-500 text-emerald-400 hover:bg-emerald-500 hover:text-black'
           }`}
         >
-          {isActive ? 'STOP' : 'START'}
+          {state.isLive ? 'STOP' : 'START'}
         </button>
       </div>
 
@@ -43,11 +54,15 @@ export const LiveSessionOverlay: React.FC<LiveSessionOverlayProps> = ({
         <div className="grid grid-cols-2 gap-2 text-[10px] font-mono uppercase tracking-[0.18em] text-zinc-500">
           <div className="border border-zinc-800 bg-zinc-900 px-2 py-2">
             <div className="text-zinc-600">ACTIVE CHORD</div>
-            <div className="mt-1 text-amber-400 text-sm font-semibold tracking-normal">{activeChord || '—'}</div>
+            <div className={`mt-1 text-sm font-semibold tracking-normal text-orange-400 transition-transform duration-200 ${pulse ? 'scale-[1.08]' : 'scale-100'}`}>
+              {state.activeChord || '—'}
+            </div>
           </div>
           <div className="border border-zinc-800 bg-zinc-900 px-2 py-2">
             <div className="text-zinc-600">MEASURE</div>
-            <div className="mt-1 text-stone-200 text-sm font-semibold tracking-normal">{currentMeasure}</div>
+            <div className="mt-1 text-stone-200 text-sm font-semibold tracking-normal">
+              BAR {String(state.currentBar).padStart(3, '0')}
+            </div>
           </div>
         </div>
 
@@ -55,22 +70,25 @@ export const LiveSessionOverlay: React.FC<LiveSessionOverlayProps> = ({
           <div className="flex items-center justify-between">
             <span className="text-[10px] font-mono uppercase tracking-[0.18em] text-zinc-500">CHORD DURATION</span>
             <span className="text-[9px] font-mono uppercase tracking-[0.18em] text-zinc-600">
-              INDEX {activeChordIndex + 1}
+              TOTAL BARS {String(state.totalBars).padStart(3, '0')}
             </span>
           </div>
 
           <div className="grid gap-2">
-            {chordDurationsBars.map((bars, index) => (
-              <div key={`chord-duration-${index}`} className="flex items-center justify-between border border-zinc-800 bg-zinc-900 px-2 py-2">
+            {state.chordSlots.map((slot) => (
+              <div
+                key={`chord-duration-${slot.index}`}
+                className={`flex items-center justify-between border bg-zinc-900 px-2 py-2 ${state.activeChordIndex === slot.index ? 'border-orange-500' : 'border-zinc-800'}`}
+              >
                 <span className="text-[10px] font-mono uppercase tracking-[0.16em] text-zinc-500">
-                  CHORD {index + 1}
+                  CHORD {slot.index + 1}  {slot.chord || '—'}
                 </span>
                 <div className="flex items-center gap-1">
                   <button
                     type="button"
-                    onClick={() => onSetChordDurationBars(index, 1)}
+                    onClick={() => onSetChordDuration(slot.index, 1)}
                     className={`border px-2 py-1 text-[9px] font-mono uppercase tracking-[0.16em] ${
-                      bars === 1
+                      slot.durationBars === 1
                         ? 'border-orange-500 text-orange-400 bg-zinc-950'
                         : 'border-zinc-700 text-zinc-500'
                     }`}
@@ -79,9 +97,9 @@ export const LiveSessionOverlay: React.FC<LiveSessionOverlayProps> = ({
                   </button>
                   <button
                     type="button"
-                    onClick={() => onSetChordDurationBars(index, 2)}
+                    onClick={() => onSetChordDuration(slot.index, 2)}
                     className={`border px-2 py-1 text-[9px] font-mono uppercase tracking-[0.16em] ${
-                      bars === 2
+                      slot.durationBars === 2
                         ? 'border-orange-500 text-orange-400 bg-zinc-950'
                         : 'border-zinc-700 text-zinc-500'
                     }`}

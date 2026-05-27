@@ -82,9 +82,9 @@ export const SessionVaultPanel: React.FC<SessionVaultPanelProps> = ({
         </div>
       ) : null}
 
-      <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
+      <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
         {sessions.length === 0 ? (
-          <div className="border border-zinc-800 bg-zinc-950 px-3 py-3 text-[10px] font-mono uppercase tracking-[0.18em] text-zinc-500">
+          <div className="border border-zinc-800 bg-zinc-950 px-3 py-3 text-[10px] font-mono uppercase tracking-[0.18em] text-zinc-500 max-h-24 overflow-y-auto">
             No stored sessions yet.
           </div>
         ) : (

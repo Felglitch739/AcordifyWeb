@@ -16,6 +16,12 @@ export {
   parseSessionSnapshot,
   serializeSessionSnapshot,
 } from './sessionExporter';
+export {
+  buildChordSchedule,
+  beatToBarAndPosition,
+  getActiveChordAtBeat,
+  getTotalBeats,
+} from './liveSessionUtils';
 export type {
   NoteName,
   ChordQuality,
@@ -31,3 +37,8 @@ export type {
   SessionLyrics,
   SessionPlayer,
 } from './sessionExporter';
+export type {
+  ChordSlot,
+  LiveSessionConfig,
+  LiveSessionState,
+} from './liveSessionUtils';

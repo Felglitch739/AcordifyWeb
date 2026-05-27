@@ -1,5 +1,6 @@
 import React from 'react';
 import type { LyricsParams, LyricsResult } from '../services';
+import { PanelWrapper } from './PanelWrapper';
 
 interface LyricsControlPanelProps {
   rhymeScheme: LyricsParams['rhymeScheme'];
@@ -105,43 +106,23 @@ export const LyricsControlPanel: React.FC<LyricsControlPanelProps> = ({
   const isWeakConcept = thematicConcept.trim().length > 0 && (thematicConcept.trim().length < 8 || conceptWords.length < 2);
 
   return (
-    <div className="border border-zinc-700 bg-zinc-800 p-4 rounded-sm shadow-md select-none flex flex-col gap-4">
-      <div
-        className="flex items-center justify-between border-b border-zinc-700 pb-2 cursor-pointer"
-        onClick={onToggleCollapse}
-        role="button"
-        tabIndex={0}
-        onKeyDown={(event) => {
-          if (event.key === 'Enter' || event.key === ' ') {
-            event.preventDefault();
-            onToggleCollapse?.();
-          }
-        }}
-      >
+    <PanelWrapper
+      className="bg-zinc-800"
+      collapsed={collapsed}
+      onToggleCollapse={onToggleCollapse}
+      onBypass={onBypass}
+      title={(
         <span className="text-2xs font-mono font-bold tracking-wider text-zinc-400 uppercase">
           [LYRICS] // ADVANCED PARAMETERS
         </span>
-        <div className="flex items-center gap-3">
-          <span className="hidden xs:inline-block text-[10px] font-mono text-emerald-500 font-bold uppercase animate-pulse">
-            • CONTROL ACTIVE
-          </span>
-          {onBypass && (
-            <button
-              type="button"
-              onClick={(event) => {
-                event.stopPropagation();
-                onBypass();
-              }}
-              className="text-[9px] font-mono text-zinc-500 hover:text-red-500 border border-zinc-700 hover:border-red-900/50 px-1 py-0.5 rounded-sm bg-zinc-900 uppercase transition-colors cursor-pointer"
-            >
-              [ BYPASS ]
-            </button>
-          )}
-        </div>
-      </div>
-
-      {!collapsed && (
-        <>
+      )}
+      rightSlot={(
+        <span className="hidden xs:inline-block text-[10px] font-mono text-emerald-500 font-bold uppercase animate-pulse">
+          • CONTROL ACTIVE
+        </span>
+      )}
+      contentClassName="p-4 flex flex-col gap-4"
+    >
       <div className="space-y-2">
         <div className="flex items-center justify-between">
           <label className="text-2xs font-mono font-bold tracking-wider text-zinc-400 uppercase">
@@ -343,8 +324,6 @@ export const LyricsControlPanel: React.FC<LyricsControlPanelProps> = ({
           ) : null}
         </div>
       )}
-        </>
-      )}
-    </div>
+    </PanelWrapper>
   );
 };

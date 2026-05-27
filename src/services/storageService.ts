@@ -1,5 +1,6 @@
 import JSZip from 'jszip';
 import { parseSessionSnapshot, type SessionSnapshot } from '../utils';
+import { openDB } from 'idb';
 
 const DB_NAME = 'acordify-web';
 const DB_VERSION = 1;
@@ -25,68 +26,16 @@ export interface BackupExportResult {
   blob: Blob;
 }
 
-function assertIndexedDbAvailable(): void {
-  if (typeof indexedDB === 'undefined') {
-    throw new Error('[StorageService] IndexedDB is not available in this environment.');
-  }
-}
-
-function openDatabase(): Promise<IDBDatabase> {
-  assertIndexedDbAvailable();
-
-  return new Promise((resolve, reject) => {
-    const request = indexedDB.open(DB_NAME, DB_VERSION);
-
-    request.onupgradeneeded = () => {
-      const db = request.result;
-      if (!db.objectStoreNames.contains(STORE_NAME)) {
-        db.createObjectStore(STORE_NAME, { keyPath: 'id' });
+async function getDb() {
+  const db = await openDB(DB_NAME, DB_VERSION, {
+    upgrade(database) {
+      if (!database.objectStoreNames.contains(STORE_NAME)) {
+        database.createObjectStore(STORE_NAME, { keyPath: 'id' });
       }
-    };
-
-    request.onerror = () => {
-      reject(request.error ?? new Error('[StorageService] Failed to open IndexedDB.'));
-    };
-
-    request.onsuccess = () => {
-      resolve(request.result);
-    };
+    },
   });
-}
 
-function withStore<T>(mode: IDBTransactionMode, runner: (store: IDBObjectStore) => T): Promise<T> {
-  return openDatabase().then(
-    (db) =>
-      new Promise<T>((resolve, reject) => {
-        const transaction = db.transaction(STORE_NAME, mode);
-        const store = transaction.objectStore(STORE_NAME);
-        let resultPromise!: Promise<T>;
-        try {
-          resultPromise = Promise.resolve(runner(store));
-        } catch (error) {
-          db.close();
-          reject(error);
-          return;
-        }
-
-        transaction.onerror = () => {
-          db.close();
-          reject(transaction.error ?? new Error('[StorageService] IndexedDB transaction failed.'));
-        };
-
-        transaction.oncomplete = () => {
-          db.close();
-          resultPromise.then(resolve).catch(reject);
-        };
-      }),
-  );
-}
-
-function requestToPromise<T>(request: IDBRequest<T>): Promise<T> {
-  return new Promise((resolve, reject) => {
-    request.onerror = () => reject(request.error ?? new Error('[StorageService] IndexedDB request failed.'));
-    request.onsuccess = () => resolve(request.result);
-  });
+  return db;
 }
 
 function toSummary(record: SavedSessionRecord): SavedSessionSummary {
@@ -127,6 +76,8 @@ function ensureSessionRecord(value: unknown): SavedSessionRecord {
 }
 
 export async function saveSession(snapshot: SessionSnapshot, name?: string): Promise<string> {
+  const db = await getDb();
+
   const record: SavedSessionRecord = {
     id: crypto.randomUUID(),
     name: name?.trim() || snapshot.metadata.title,
@@ -134,22 +85,25 @@ export async function saveSession(snapshot: SessionSnapshot, name?: string): Pro
     snapshot,
   };
 
-  await withStore('readwrite', (store) => store.put(record));
+  await db.put(STORE_NAME, record);
   return record.id;
 }
 
 export async function upsertSession(record: SavedSessionRecord): Promise<void> {
-  await withStore('readwrite', (store) => store.put(record));
+  const db = await getDb();
+  await db.put(STORE_NAME, record);
 }
 
 export async function listSessions(): Promise<SavedSessionSummary[]> {
-  const records = await withStore('readonly', (store) => requestToPromise(store.getAll()));
-  return records.map(ensureSessionRecord).sort((left, right) => right.savedAt.localeCompare(left.savedAt)).map(toSummary);
+  const db = await getDb();
+  const records = await db.getAll(STORE_NAME);
+  const normalized = records.map(ensureSessionRecord);
+  return normalized.sort((a, b) => b.savedAt.localeCompare(a.savedAt)).map(toSummary);
 }
 
 export async function loadSession(id: string): Promise<SessionSnapshot> {
-  const record = await withStore('readonly', (store) => requestToPromise(store.get(id)));
-
+  const db = await getDb();
+  const record = await db.get(STORE_NAME, id as any);
   if (!record) {
     throw new Error(`[StorageService] Session '${id}' was not found.`);
   }
@@ -158,11 +112,13 @@ export async function loadSession(id: string): Promise<SessionSnapshot> {
 }
 
 export async function deleteSession(id: string): Promise<void> {
-  await withStore('readwrite', (store) => store.delete(id));
+  const db = await getDb();
+  await db.delete(STORE_NAME, id as any);
 }
 
 export async function exportSessionsBackup(): Promise<BackupExportResult> {
-  const records = await withStore('readonly', (store) => requestToPromise(store.getAll()));
+  const db = await getDb();
+  const records = await db.getAll(STORE_NAME);
   const zip = new JSZip();
   const normalizedRecords = records.map(ensureSessionRecord);
 
@@ -200,13 +156,59 @@ export async function importSessionsBackup(file: File): Promise<number> {
   );
 
   let importedCount = 0;
+  const db = await getDb();
 
   for (const entry of sessionFiles) {
     const raw = await entry.async('string');
     const record = ensureSessionRecord(JSON.parse(raw));
-    await upsertSession(record);
+    await db.put(STORE_NAME, record as any);
     importedCount += 1;
   }
 
   return importedCount;
+}
+
+// JSON export/import (single-file backup) — faster roundtrip and human-readable
+export async function exportSessionsJson(): Promise<BackupExportResult> {
+  const db = await getDb();
+  const records = await db.getAll(STORE_NAME);
+  const normalized = records.map(ensureSessionRecord);
+
+  const payload = {
+    version: '1.0',
+    exportedAt: new Date().toISOString(),
+    sessions: normalized,
+  };
+
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+
+  return {
+    filename: `acordify-backup-${new Date().toISOString().replace(/[:.]/g, '-')}.acordify-backup.json`,
+    blob,
+  };
+}
+
+export async function importSessionsJson(file: File): Promise<number> {
+  const raw = await file.text();
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch (err) {
+    throw new Error('[StorageService] Invalid JSON backup file.');
+  }
+
+  if (typeof parsed !== 'object' || parsed === null || !Array.isArray((parsed as any).sessions)) {
+    throw new Error('[StorageService] Backup JSON missing sessions array.');
+  }
+
+  const sessions = (parsed as any).sessions as unknown[];
+  let imported = 0;
+  const db = await getDb();
+  for (const s of sessions) {
+    const record = ensureSessionRecord(s);
+    await db.put(STORE_NAME, record as any);
+    imported += 1;
+  }
+
+  return imported;
 }

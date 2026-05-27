@@ -1,8 +1,11 @@
 import { useEffect, useRef, useState, type ChangeEvent } from 'react';
 import type { SongConcept } from './types';
-import { Header, MoodSelector, ChordGrid, ScalePanel, LyricsSheet, TactileButton, LyricsControlPanel, LiveSessionOverlay, SessionVaultPanel } from './components';
+import { Header, MoodSelector, ChordGrid, ScalePanel, LyricsSheet, TactileButton, LyricsControlPanel, LiveSessionOverlay, SessionVaultPanel, StrumsVisualizer, PanelWrapper, SortableToggle } from './components';
+import useWorkspaceLayout from './hooks/useWorkspaceLayout';
+import { DndContext, PointerSensor, KeyboardSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
+import { SortableContext, rectSortingStrategy, sortableKeyboardCoordinates } from '@dnd-kit/sortable';
 import { generateSongConcept } from './services';
-import { useAudioEngine, useLiveSession, useLyricsControls, useStorage } from './hooks';
+import { useAudioEngine, useLiveSession, useLyricsControls, useStorage, useStrumSync } from './hooks';
 import { buildSessionSnapshot, detectKey, parseSessionSnapshot, serializeSessionSnapshot } from './utils';
 
 const MOOD_DATA: Record<string, { chords: string[]; scale: string; lyrics: string; continuation: string }> = {
@@ -55,6 +58,15 @@ function App() {
     { id: 'lyrics_sheet', name: 'SHEET', isVisible: true },
     { id: 'scale_visualizer', name: 'RECEIVER', isVisible: true }
   ]);
+
+  const workspaceLayout = useWorkspaceLayout(modules.map(m => m.id), (nextOrder) => {
+    setModules(prev => nextOrder.map(id => prev.find(p => p.id === id) || { id, name: id, isVisible: true }));
+  });
+
+  const [dragActiveId, setDragActiveId] = useState<string | null>(null);
+  const [dragOverId, setDragOverId] = useState<string | null>(null);
+
+  const isTouchDevice = typeof window !== 'undefined' && typeof window.matchMedia === 'function' && window.matchMedia('(pointer: coarse)').matches;
 
   const isModuleVisible = (id: string) => {
     return modules.find(m => m.id === id)?.isVisible ?? false;
@@ -128,12 +140,19 @@ function App() {
     bpm,
     mood: concept.mood,
   });
+  const strums = useStrumSync({
+    initialMood: concept.mood,
+    bpm,
+  });
   const liveSession = useLiveSession({
     chords: concept.chords,
-    lyrics: chordProContent,
     bpm,
   });
   const storage = useStorage();
+
+  useEffect(() => {
+    strums.setMood(concept.mood);
+  }, [concept.mood]);
 
   // Synchronized metronome logic
   useEffect(() => {
@@ -163,6 +182,9 @@ function App() {
 
   const handlePlayLoopToggle = () => {
     if (isPlaying) {
+      if (liveSession.isLive) {
+        liveSession.stopLive();
+      }
       stopPlayback();
       setIsPracticeMode(false);
     } else {
@@ -274,8 +296,8 @@ function App() {
       stopPlayback();
     }
 
-    if (liveSession.isLiveSessionActive) {
-      liveSession.disableLiveSession({ stopTransport: true });
+    if (liveSession.isLive) {
+      liveSession.stopLive();
     }
 
     setIsPracticeMode(false);
@@ -317,8 +339,8 @@ function App() {
       stopPlayback();
     }
 
-    if (liveSession.isLiveSessionActive) {
-      liveSession.disableLiveSession({ stopTransport: true });
+    if (liveSession.isLive) {
+      liveSession.stopLive();
     }
 
     setIsPracticeMode(false);
@@ -374,29 +396,94 @@ function App() {
           </div>
           
           <div className="flex flex-wrap items-center justify-center gap-2.5">
-            {modules.map(mod => (
-              <button
-                key={mod.id}
-                type="button"
-                onClick={() => toggleModule(mod.id)}
-                className={`flex items-center space-x-2 px-2.5 py-1 border rounded-sm font-mono text-[9px] uppercase tracking-wider font-semibold select-none transition-all duration-100 cursor-pointer ${
-                  mod.isVisible
-                    ? 'bg-zinc-900 text-stone-200 border-zinc-700 hover:bg-zinc-800 hover:border-zinc-600'
-                    : 'bg-zinc-950 text-zinc-600 border-zinc-900 hover:bg-zinc-900'
-                }`}
+            {/* Screen-reader instructions for keyboard DnD */}
+            <div id="workspace-dnd-instructions" className="sr-only">
+              Usa Barra espaciadora para levantar, Flechas para mover, Esc para cancelar.
+            </div>
+            {!isTouchDevice ? (
+              <DndContext
+                sensors={useSensors(useSensor(PointerSensor), useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }))}
+                onDragStart={(ev) => setDragActiveId(String(ev.active.id))}
+                onDragOver={(ev) => setDragOverId(ev.over ? String(ev.over.id) : null)}
+                onDragEnd={(event: DragEndEvent) => {
+                  const { active, over } = event;
+                  setDragActiveId(null);
+                  setDragOverId(null);
+                  if (!over) return;
+                  workspaceLayout.handleDragEnd(String(active.id), String(over.id));
+                }}
+                onDragCancel={() => { setDragActiveId(null); setDragOverId(null); }}
               >
-                <div 
-                  className={`w-1.5 h-1.5 rounded-full transition-all duration-75 ${
-                    mod.isVisible 
-                      ? 'bg-emerald-500 shadow-[0_0_6px_#10b981]' 
-                      : 'bg-red-700/50'
-                  }`}
-                ></div>
-                <span>
-                  {mod.isVisible ? `[ON] ${mod.name}` : `[OFF] ${mod.name}`}
-                </span>
-              </button>
-            ))}
+                <SortableContext items={modules.map(m => m.id)} strategy={rectSortingStrategy}>
+                  {modules.map((mod, idx) => (
+                    <div key={mod.id} className="relative">
+                      {/* Drop placeholder appears before the hovered target */}
+                      {dragOverId === mod.id && dragActiveId && dragActiveId !== mod.id && (
+                        <div className="absolute -top-3 left-0 right-0 flex justify-center pointer-events-none">
+                          <div className="bg-amber-500/10 backdrop-blur-sm rounded-full px-2 py-0.5 shadow-md transition-all duration-200 ease-out transform -translate-y-1 opacity-100">
+                            <svg width="18" height="10" viewBox="0 0 24 14" fill="none" xmlns="http://www.w3.org/2000/svg" className="text-amber-400">
+                              <path d="M2 7h18" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                              <path d="M12 1l6 6-6 6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                            </svg>
+                          </div>
+                        </div>
+                      )}
+
+                      <SortableToggle key={mod.id} id={mod.id}>
+                        <div className={`transition-all duration-200 ${dragOverId === mod.id ? 'ring-2 ring-amber-500/30 shadow-[0_8px_20px_rgba(245,158,11,0.12)] scale-102' : ''}`}>
+                          <button
+                            type="button"
+                            onClick={() => toggleModule(mod.id)}
+                            className={`flex items-center space-x-2 px-2.5 py-1 border rounded-sm font-mono text-[9px] uppercase tracking-wider font-semibold select-none transition-all duration-150 cursor-pointer ${
+                              mod.isVisible
+                                ? 'bg-zinc-900 text-stone-200 border-zinc-700 hover:bg-zinc-800 hover:border-zinc-600'
+                                : 'bg-zinc-950 text-zinc-600 border-zinc-900 hover:bg-zinc-900'
+                            }`}
+                          >
+                            <div 
+                              className={`w-1.5 h-1.5 rounded-full transition-all duration-75 ${
+                                mod.isVisible 
+                                  ? 'bg-emerald-500 shadow-[0_0_6px_#10b981]' 
+                                  : 'bg-red-700/50'
+                              }`}
+                            ></div>
+                            <span>
+                              {mod.isVisible ? `[ON] ${mod.name}` : `[OFF] ${mod.name}`}
+                            </span>
+                          </button>
+                        </div>
+                      </SortableToggle>
+                    </div>
+                  ))}
+                </SortableContext>
+              </DndContext>
+            ) : (
+              // Touch devices: render static controls without drag handles
+              modules.map(mod => (
+                <div key={mod.id} className="inline-block">
+                  <button
+                    type="button"
+                    onClick={() => toggleModule(mod.id)}
+                    className={`flex items-center space-x-2 px-2.5 py-1 border rounded-sm font-mono text-[9px] uppercase tracking-wider font-semibold select-none transition-all duration-100 cursor-pointer ${
+                      mod.isVisible
+                        ? 'bg-zinc-900 text-stone-200 border-zinc-700 hover:bg-zinc-800 hover:border-zinc-600'
+                        : 'bg-zinc-950 text-zinc-600 border-zinc-900 hover:bg-zinc-900'
+                    }`}
+                  >
+                    <div 
+                      className={`w-1.5 h-1.5 rounded-full transition-all duration-75 ${
+                        mod.isVisible 
+                          ? 'bg-emerald-500 shadow-[0_0_6px_#10b981]' 
+                          : 'bg-red-700/50'
+                      }`}
+                    ></div>
+                    <span>
+                      {mod.isVisible ? `[ON] ${mod.name}` : `[OFF] ${mod.name}`}
+                    </span>
+                  </button>
+                </div>
+              ))
+            )}
           </div>
         </div>
   
@@ -404,7 +491,7 @@ function App() {
         <main className="max-w-7xl w-full mx-auto p-4 md:p-6 lg:p-8 grow flex flex-col space-y-8">
           
           {/* Top Control Panel: Mood, Smart Transposer & Practice Engine */}
-          <div className="flex flex-wrap gap-6 items-stretch">
+          <div className="flex flex-wrap gap-6 items-start">
             {isModuleVisible('control_panel') && (
               <div className="grow min-w-75 md:flex-[2_2_0%]">
                 <MoodSelector 
@@ -452,38 +539,23 @@ function App() {
                     collapsed={isPanelCollapsed('lyrics_controls')}
                     onToggleCollapse={() => togglePanelCollapsed('lyrics_controls')}
                   />
-
-                  <div className="mt-4">
-                    <SessionVaultPanel
-                      sessions={storage.sessions}
-                      isLoading={storage.isLoading}
-                      error={storage.error}
-                      onSaveCurrent={handleSaveCurrentSession}
-                      onLoadSession={handleLoadStoredSession}
-                      onDeleteSession={handleDeleteStoredSession}
-                      onExportBackup={handleExportBackup}
-                      onImportBackup={handleImportBackup}
-                      onRefresh={storage.refreshSessions}
-                    />
-                  </div>
                 </div>
               </div>
             )}
-            
+
             {isModuleVisible('transposer') && (
-              <div className="grow min-w-50 md:flex-1 border border-zinc-700 bg-zinc-800 p-4 rounded-sm flex flex-col space-y-3 shadow-md select-none justify-between">
-                <div className="flex items-center justify-between border-b border-zinc-700 pb-2">
+              <PanelWrapper
+                className="grow min-w-50 md:flex-1 bg-zinc-800"
+                collapsed={isPanelCollapsed('transposer')}
+                onToggleCollapse={() => togglePanelCollapsed('transposer')}
+                onBypass={() => handleBypass('transposer')}
+                title={(
                   <label className="text-2xs font-mono font-bold tracking-wider text-zinc-400 uppercase">
                     [PITCH] // SMART TRANSPOSER
                   </label>
-                  <button 
-                    type="button"
-                    onClick={() => handleBypass('transposer')}
-                    className="text-[9px] font-mono text-zinc-500 hover:text-red-500 border border-zinc-700 hover:border-red-900/50 px-1 py-0.5 rounded-sm bg-zinc-900 uppercase transition-colors cursor-pointer"
-                  >
-                    [ BYPASS ]
-                  </button>
-                </div>
+                )}
+                contentClassName="p-4 flex flex-col space-y-3"
+              >
                 <div className="grow flex items-center justify-center space-x-3">
                   <TactileButton variant="zinc" onClick={() => setTransposeSteps(s => s - 1)} className="px-3! py-2! text-2xs!">
                     -1 ST
@@ -495,11 +567,32 @@ function App() {
                     +1 ST
                   </TactileButton>
                 </div>
-              </div>
+                <StrumsVisualizer
+                  state={strums.state}
+                  onPrevPattern={strums.prevPattern}
+                  onNextPattern={strums.nextPattern}
+                  onTogglePlay={strums.toggle}
+                  onBypass={() => handleBypass('transposer')}
+                />
+              </PanelWrapper>
             )}
+
+            <div className="grow min-w-50 md:flex-1">
+              <SessionVaultPanel
+                sessions={storage.sessions}
+                isLoading={storage.isLoading}
+                error={storage.error}
+                onSaveCurrent={handleSaveCurrentSession}
+                onLoadSession={handleLoadStoredSession}
+                onDeleteSession={handleDeleteStoredSession}
+                onExportBackup={handleExportBackup}
+                onImportBackup={handleImportBackup}
+                onRefresh={storage.refreshSessions}
+              />
+            </div>
   
             {/* Practice Engine Module - Always Visible */}
-            <div className="grow min-w-50 md:flex-1 border border-zinc-700 bg-zinc-800 p-4 rounded-sm flex flex-col space-y-3 shadow-md select-none justify-between">
+              <div className="grow min-w-50 md:flex-1 border border-zinc-700 bg-zinc-800 p-4 rounded-sm flex flex-col space-y-3 shadow-md select-none justify-between">
               <div className="flex items-center justify-between border-b border-zinc-700 pb-2">
                 <label className="text-2xs font-mono font-bold tracking-wider text-zinc-400 uppercase">
                   [SESSION] // PRACTICE ENGINE
@@ -515,7 +608,7 @@ function App() {
                   ></div>
                 </div>
               </div>
-              <div className="flex flex-col space-y-2 grow justify-center">
+              <div className="flex flex-col space-y-3 grow justify-center">
                 <TactileButton 
                   variant={isPracticeMode ? 'orange' : 'zinc'} 
                   onClick={handlePracticeModeToggle}
@@ -525,6 +618,11 @@ function App() {
                 >
                   {isPracticeMode ? '[ ACTIVE ]' : '[ PRACTICE MODE ]'}
                 </TactileButton>
+                <LiveSessionOverlay
+                  state={liveSession.state}
+                  onToggle={liveSession.isLive ? liveSession.stopLive : liveSession.startLive}
+                  onSetChordDuration={liveSession.setChordDuration}
+                />
                 <div className="flex items-center justify-center space-x-2">
                   <TactileButton 
                     variant="zinc" 
@@ -604,8 +702,8 @@ function App() {
                       lyrics={chordProContent} 
                       transposeSteps={transposeSteps} 
                       isPracticeMode={isPracticeMode}
-                      isLiveSessionActive={liveSession.isLiveSessionActive}
-                      activeLineIndex={liveSession.activeLineIndex}
+                      isLive={liveSession.isLive}
+                      activeChord={liveSession.state.activeChord}
                       onBypass={() => handleBypass('lyrics_sheet')}
                       collapsed={isPanelCollapsed('lyrics_sheet')}
                       onToggleCollapse={() => togglePanelCollapsed('lyrics_sheet')}
@@ -644,14 +742,6 @@ function App() {
                       </TactileButton>
 
                       <TactileButton
-                        variant={liveSession.isLiveSessionActive ? 'green' : 'zinc'}
-                        onClick={liveSession.toggleLiveSession}
-                        className="font-bold min-w-27.5"
-                      >
-                        {liveSession.isLiveSessionActive ? 'STOP LIVE' : 'LIVE SESSION'}
-                      </TactileButton>
-
-                      <TactileButton
                         variant="zinc"
                         onClick={handleExportSession}
                         className="font-bold min-w-27.5"
@@ -669,17 +759,6 @@ function App() {
                     </div>
                   </div>
 
-                  <div className="pt-2">
-                    <LiveSessionOverlay
-                      isActive={liveSession.isLiveSessionActive}
-                      activeChord={concept.chords[liveSession.activeChordIndex] ?? concept.chords[0] ?? ''}
-                      activeChordIndex={liveSession.activeChordIndex}
-                      currentMeasure={liveSession.currentMeasure}
-                      chordDurationsBars={liveSession.chordDurationsBars}
-                      onToggle={liveSession.toggleLiveSession}
-                      onSetChordDurationBars={liveSession.setChordDurationBars}
-                    />
-                  </div>
                 </div>
               )}
             </div>
