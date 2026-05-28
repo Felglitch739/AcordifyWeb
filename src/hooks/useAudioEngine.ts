@@ -6,6 +6,7 @@ export function useAudioEngine(
   chords: string[],
   transposeSteps: number,
   bpm: number,
+  variations: number[],
   onBeatTrigger?: () => void
 ) {
   const [isPlaying, setIsPlaying] = useState(false);
@@ -20,13 +21,14 @@ export function useAudioEngine(
   const chordsNotesRef = useRef<string[][]>([]);
   const onBeatTriggerRef = useRef<(() => void) | undefined>(onBeatTrigger);
 
-  // Sync latest chords and transpositions using static chord dictionary
+  // Sync latest chords, transpositions and variations using static chord dictionary
   useEffect(() => {
-    chordsNotesRef.current = chords.map(chord => {
+    chordsNotesRef.current = chords.map((chord, index) => {
       const transposed = transposeChord(chord, transposeSteps);
-      return getChordData(transposed).midiNotes;
+      const varIndex = variations[index] || 0;
+      return getChordData(transposed, varIndex).midiNotes;
     });
-  }, [chords, transposeSteps]);
+  }, [chords, transposeSteps, variations]);
 
   // Sync latest beat trigger callback
   useEffect(() => {
@@ -62,30 +64,30 @@ export function useAudioEngine(
 
     // 3. Guitar Plucking FMSynth Physical Modeling (using FMSynth inside PolySynth)
     const synth = new Tone.PolySynth(Tone.FMSynth, {
-      harmonicity: 1.0,
-      modulationIndex: 4.0,
+      harmonicity: 3.01,
+      modulationIndex: 12,
       oscillator: {
-        type: 'sine' // Carrier wave (fundamental pitch string vibration)
+        type: 'triangle' // Carrier wave (gives warm, woody woodiness)
       },
       envelope: {
-        attack: 0.005,  // Instant picking strike
-        decay: 0.3,    // Fast pick decay
-        sustain: 0.4,   // Lingering string decay
-        release: 1.2    // Acoustic body resonance fade
+        attack: 0.003,  // Quick strike
+        decay: 0.4,    // Natural string decay
+        sustain: 0.1,   // Low sustain for plucked string
+        release: 1.4    // Resonant ring out
       },
       modulation: {
-        type: 'triangle' // Modulator wave (string strike pluck noise)
+        type: 'sine'
       },
       modulationEnvelope: {
-        attack: 0.001,  // Instant pick impact
-        decay: 0.1,     // Ultra-fast transient pluck decay
-        sustain: 0.1,   // Muted string buzz
+        attack: 0.002,
+        decay: 0.15,
+        sustain: 0.05,
         release: 0.8
       }
     }).connect(filter);
     
     // Set background track volume
-    synth.volume.value = -12;
+    synth.volume.value = -10;
     synthRef.current = synth;
 
     // 4. Sequence loop: plays 4 chords sequentially (each for 1 measure / 4 beats)

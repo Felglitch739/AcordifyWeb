@@ -1,4 +1,5 @@
 import { validateProgression, type ProgressionValidationResult, parseChord } from '../utils';
+import { recordTokenUsage } from './tokenTracker';
 
 export type ChordMode = 'major' | 'minor';
 export type ChordComplexity = 'basic' | 'intermediate' | 'advanced';
@@ -248,6 +249,12 @@ export async function generateChordProgression(
   }
 
   const data = await response.json();
+
+  // Track token usage
+  if (data.usage) {
+    recordTokenUsage('chordGeneration', 'gpt-4o-mini', data.usage);
+  }
+
   const content = data?.choices?.[0]?.message?.content;
 
   if (typeof content !== 'string') {

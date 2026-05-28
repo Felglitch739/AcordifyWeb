@@ -423,6 +423,93 @@ Como primer paso antes de la vista móvil dedicada completa:
 
 ---
 
+## ADICIONES SUGERIDAS Y CLARIFICACIONES (por si faltan)
+
+Para evitar ambigüedades y reducir ciclos de revisión, añadir las siguientes reglas y verificaciones operacionales al inicio de la sesión AUTOPILOT:
+
+- **Compilación y pruebas por cada tarea:** Después de cada tarea (o conjunto lógico de cambios), ejecutar:
+  ```bash
+  npm run test
+  npm run build
+  ```
+  Asegurarse de que `npm run build` no arroje errores ni warnings relevantes.
+
+- **Cobertura mínima y tests:** Añadir pruebas unitarias/integ. para nuevas funcionalidades. Mantener cobertura razonable (p.ej. no bajar más de 2% del baseline). Los cambios que alteren lógica crítica (song lookup, transposición, guardado) deben incluir tests.
+
+- **Accesibilidad:** Seguir WCAG 2.1 AA:
+  - Todos los controles deben ser accesibles por teclado.
+  - Roles ARIA relevantes y `aria-live` para notificaciones.
+  - Contraste mínimo 4.5:1 para texto normal; 3:1 para texto grande.
+
+- **Manejo de secretos / env:** Nunca hardcodear claves. Añadir `.env.example` con variables requeridas:
+  - `VITE_AZURE_API_KEY`
+  - `VITE_AZURE_ENDPOINT`
+  Documentar timeouts y rate-limit handling.
+
+- **Tone.js constraint (refuerzo):** Bajo ninguna circunstancia detener `Tone.Transport` en un cleanup; pausar UI/visuals está permitido siempre que la transport sigue corriendo.
+
+- **Estilo y linting:** Asegurar `typescript: { "noImplicitAny": true, "strict": true }` y pasar ESLint/Prettier. Añadir `npm run lint` a la checklist.
+
+- **Performance / Bundle:** Evitar grandes librerías nuevas sin justificación; prefer code-splitting para paneles pesados. Mantener bundles razonables (cada chunk < 200KB gzipped idealmente).
+
+- **API resiliencia:** Para llamadas externas (Azure / web_search), implementar timeouts (10s) y retry-backoff limitado (max 2 retries). Mostrar errores amigables en UI con Toaster.
+
+- **Internationalization / idioma:** Preferir textos en español por defecto (según copilot-instructions.md), pero mantener todos los strings centralizados para futura i18n.
+
+- **Commit / PR checklist:** Cada PR debe incluir:
+  - Descripción breve de cambios
+  - Tests añadidos/actualizados
+  - `npm run build` successful
+  - No console.error en runtime
+  - Capturas o short gif si hay cambios visuales
+
+- **CI / CD:** Asegurar que GitHub Actions ejecuta `npm ci`, `npm run lint`, `npm run test`, `npm run build` antes de merge.
+
+- **Verificación manual final:** Antes de cerrar AUTOPILOT, comprobar manualmente:
+  1. Abrir la app en localhost, realizar búsqueda de canción conocida (p.ej. "Wonderwall Oasis") y confirmar `found: true` y acordes visibles.
+  2. Cambiar tema y recargar, confirmar persistencia.
+  3. Modo edición de ChordPro: editar, salir y ver cambios aplicados.
+  4. Móvil (375px) revisar orden y touch targets.
+
+---
+
+## SUGERENCIAS DE PRUEBAS A AÑADIR (por tarea)
+
+- TAREA 1: tests que simulen `tool_result` en la respuesta y confirmación de parsing y advertencias cuando `confidence < 0.7`.
+- TAREA 2: tests de UI para el input custom (limpia presets, persiste en estado global).
+- TAREA 3: tests unitarios para la función que decide la clase de tamaño (`getFontClassForChord(symbol:string)`).
+- TAREA 5: tests para `useTheme` (persistencia en localStorage y aplicación de variables CSS).
+- TAREA 8: tests que validen el flujo edición → parse → guardar y autosave en localStorage.
+
+---
+
+Si quieres, aplico estas adiciones directamente al archivo (ya hechas aquí), o genero una lista de cambios por tarea y empiezo a implementarlas en el código. Indica si prefieres que proceda a aplicar tests y cambios ahora.
+
+2. El orden de paneles en móvil (de arriba a abajo):
+   - `[SHEET] // CHORDPRO NOTEBOOK` (primero y más grande)
+   - `[SEQUENCER CONTROL]` (play, export)
+   - `[CONTROL PANEL] // MOOD CHASSIS SELECT` (colapsado por default)
+   - `[LYRICS] // ADVANCED PARAMETERS` (colapsado por default)
+   - `[PITCH] // SMART TRANSPOSER`
+   - `[SESSION] // PRACTICE ENGINE` con Live Session
+   - `[MONITOR] // SIGNAL PROGRESSION` (colapsado por default)
+   - `[RECEIVER] // SOLO SCALE VISUALIZER` (colapsado por default)
+   - `[VAULT] // SESSION STORAGE` (colapsado por default)
+   - `[LOOKUP] // SONG SEARCH` (colapsado por default)
+
+3. En el ChordPro Notebook en móvil:
+   - `font-size: 18px` mínimo para los acordes
+   - `font-size: 16px` mínimo para el texto de letras
+   - Padding generoso: `p-6`
+
+4. Los botones en móvil: `min-h-[44px]` para touch targets correctos
+
+5. El header en móvil:
+   - Solo mostrar "ACORDIFY" y el indicador de mood activo
+   - Ocultar el status bar de REC/INPUT/OUT/KHZ
+
+---
+
 ## VERIFICACIÓN FINAL
 
 Después de completar todas las tareas:

@@ -15,3 +15,5 @@ export { Fretboard } from './Fretboard';
 export { ScaleVisualizer } from './ScaleVisualizer';
 export { SongLookup } from './SongLookup';
 export { MobileWorkspace } from './mobile/MobileWorkspace';
+export { ToastContainer } from './Toast';
+export { TokenDashboard } from './TokenDashboard';

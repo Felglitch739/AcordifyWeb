@@ -4,8 +4,6 @@ import {
   listSessions,
   loadSession,
   deleteSession,
-  exportSessionsBackup,
-  importSessionsBackup,
 } from '../storageService';
 import { buildSessionSnapshot, type SessionSnapshot } from '../../utils/sessionExporter';
 
@@ -73,7 +71,7 @@ describe('storageService (IndexedDB)', () => {
     expect(sessions.some((s) => s.id === id)).toBe(false);
   });
 
-  it('exports and imports a backup zip', { timeout: 20000 }, async () => {
+  it('exports and imports a backup zip', async () => {
     const a = makeSnapshot({ metadata: { title: 'A', mood: 'a', bpm: 80 } as any } as any);
     const b = makeSnapshot({ metadata: { title: 'B', mood: 'b', bpm: 90 } as any } as any);
 
@@ -93,5 +91,5 @@ describe('storageService (IndexedDB)', () => {
     const after = await listSessions();
     // Import may overwrite by id; ensure at least the DB still contains the sessions
     expect(after.length).toBeGreaterThanOrEqual(before.length);
-  }, { timeout: 20000 });
+  }, 20000);
 });

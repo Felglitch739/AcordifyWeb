@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState, type ChangeEvent } from 'react';
 import type { SongConcept } from './types';
-import { Header, MoodSelector, ChordGrid, ScalePanel, LyricsSheet, TactileButton, LyricsControlPanel, LiveSessionOverlay, SessionVaultPanel, StrumsVisualizer, PanelWrapper, SortableToggle, SongLookup, MobileWorkspace } from './components';
+import { Header, MoodSelector, ChordGrid, ScalePanel, LyricsSheet, TactileButton, LyricsControlPanel, LiveSessionOverlay, SessionVaultPanel, StrumsVisualizer, PanelWrapper, SortableToggle, SongLookup, MobileWorkspace, ToastContainer, TokenDashboard } from './components';
 import useWorkspaceLayout from './hooks/useWorkspaceLayout';
 import { DndContext, PointerSensor, KeyboardSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, rectSortingStrategy, sortableKeyboardCoordinates } from '@dnd-kit/sortable';
 import { completeVerse, generateSongConcept } from './services';
-import { useAudioEngine, useIsMobile, useLiveSession, useLyricsControls, useStorage, useStrumSync } from './hooks';
+import { useAudioEngine, useIsMobile, useLiveSession, useLyricsControls, useStorage, useStrumSync, useTheme, useToast } from './hooks';
 import { buildSessionSnapshot, detectKey, parseSessionSnapshot, serializeSessionSnapshot, validateProgression } from './utils';
+import { isLightTheme } from './utils/themeEngine';
 
 const MOOD_DATA: Record<string, { chords: string[]; scale: string; lyrics: string; continuation: string }> = {
   'Jazzy Melancólico': {
@@ -43,14 +44,12 @@ function App() {
   const [chordProContent, setChordProContent] = useState(initialData.lyrics);
 
   const [transposeSteps, setTransposeSteps] = useState(0);
+  const [chordVariations, setChordVariations] = useState<number[]>([0, 0, 0, 0]);
   const [isLoading, setIsLoading] = useState(false);
-  const [theme, setTheme] = useState<'rack' | 'minimal'>(() => {
-    try {
-      return window.localStorage.getItem('acordify_theme') === 'minimal' ? 'minimal' : 'rack';
-    } catch {
-      return 'rack';
-    }
-  });
+  const themeCtx = useTheme();
+  const toast = useToast();
+  const [customMood, setCustomMood] = useState('');
+  const [dashboardOpen, setDashboardOpen] = useState(false);
   const isMobile = useIsMobile();
   const [toolsOpen, setToolsOpen] = useState(false);
   
@@ -167,14 +166,11 @@ function App() {
     return `${prefix}${appended}`;
   };
 
-  const [notice, setNotice] = useState<{ type: 'success' | 'error' | 'warn'; text: string } | null>(null);
-
   const handleSongLookupLoad = (res: import('./services').SongLookupResult) => {
     if (!res) return;
 
     if (!res.found) {
-      setNotice({ type: 'error', text: 'No se encontraron datos confiables.' });
-      setTimeout(() => setNotice(null), 3500);
+      toast.addToast('error', 'No se encontraron datos confiables.');
       return;
     }
 
@@ -194,15 +190,14 @@ function App() {
     const lowCoherence = validation ? validation.overallCoherenceScore < 50 : false;
 
     if (lowConfidence || lowCoherence) {
-      setNotice({ type: 'warn', text: '⚠ Acordes aproximados — verifica antes de tocar' });
-      setTimeout(() => setNotice(null), 5000);
+      toast.addToast('warning', '⚠ Acordes aproximados — verifica antes de tocar');
     } else {
-      setNotice({ type: 'success', text: `✓ Canción cargada: ${res.title ?? 'Sin título'} — ${res.artist ?? ''}` });
-      setTimeout(() => setNotice(null), 3200);
+      toast.addToast('success', `✓ Canción cargada: ${res.title ?? 'Sin título'} — ${res.artist ?? ''}`);
     }
 
     // Apply to workspace
     setBpm(res.bpmSuggested ?? bpm);
+    setChordVariations([0, 0, 0, 0]);
     syncNotebookContent(res.chordProContent ?? chordProContent);
     setConcept({
       mood: concept.mood,
@@ -226,13 +221,7 @@ function App() {
     window.localStorage.setItem('acordify_panels', JSON.stringify(panelCollapsed));
   }, [panelCollapsed]);
 
-  useEffect(() => {
-    try {
-      window.localStorage.setItem('acordify_theme', theme);
-    } catch {
-      // ignore write failures
-    }
-  }, [theme]);
+  // Theme persistence handled by useTheme hook
 
   const triggerLedPulse = () => {
     setIsLedOn(true);
@@ -245,6 +234,7 @@ function App() {
     concept.chords,
     transposeSteps,
     bpm,
+    chordVariations,
     triggerLedPulse
   );
 
@@ -313,6 +303,7 @@ function App() {
 
   const handleMoodChange = async (newMood: string) => {
     setTransposeSteps(0);
+    setChordVariations([0, 0, 0, 0]);
     setIsLoading(true);
 
     // 1. Enter hardware "loading" state
@@ -327,7 +318,7 @@ function App() {
 
     try {
       // 2. Fetch from AI Service
-      const aiConcept = await generateSongConcept(newMood, lyricsControls.genre);
+      const aiConcept = await generateSongConcept(newMood, lyricsControls.genre, concept.chords);
       
       // 3. Update with real signal
       setConcept({
@@ -418,6 +409,7 @@ function App() {
 
     setIsPracticeMode(false);
     setTransposeSteps(snapshot.player.transposition);
+    setChordVariations([0, 0, 0, 0]);
     setBpm(snapshot.player.bpm);
     syncNotebookContent(snapshot.lyrics.chordProContent);
     setConcept({
@@ -461,6 +453,7 @@ function App() {
 
     setIsPracticeMode(false);
     setTransposeSteps(snapshot.player.transposition);
+    setChordVariations([0, 0, 0, 0]);
     setBpm(snapshot.player.bpm);
     syncNotebookContent(snapshot.lyrics.chordProContent);
     setConcept({
@@ -492,7 +485,8 @@ function App() {
 
     const isLeftVisible = isModuleVisible('chord_monitor') || isModuleVisible('scale_visualizer');
     const isRightVisible = isModuleVisible('lyrics_sheet');
-    const rootClasses = `bg-zinc-900 min-h-screen text-stone-200 flex flex-col font-sans antialiased selection:bg-amber-600/30 selection:text-amber-500 relative ${theme === 'minimal' ? 'theme-minimal' : 'theme-rack'}`;
+    const light = isLightTheme(themeCtx.currentTheme);
+    const rootClasses = `bg-[var(--bg-primary)] min-h-screen text-[var(--text-primary)] flex flex-col font-sans antialiased selection:bg-[var(--accent-primary)]/30 selection:text-[var(--accent-primary)] relative`;
 
     const mobileLyrics = (
       <LyricsSheet
@@ -514,6 +508,8 @@ function App() {
         <MoodSelector
           value={concept.mood}
           onChange={handleMoodChange}
+          customMood={customMood}
+          onCustomMoodChange={setCustomMood}
         />
         <LyricsControlPanel
           rhymeScheme={lyricsControls.rhymeScheme}
@@ -614,7 +610,7 @@ function App() {
 
     return (
       <div className={rootClasses}>
-        {theme === 'rack' && (
+        {!light && (
           <div
             className="fixed inset-0 pointer-events-none opacity-[0.035] mix-blend-overlay z-50"
             style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E")` }}
@@ -623,20 +619,21 @@ function App() {
 
         {!isMobile && (
           <Header
-            theme={theme}
-            onToggleTheme={() => setTheme((prev) => (prev === 'rack' ? 'minimal' : 'rack'))}
+            currentTheme={themeCtx.currentTheme}
+            themes={themeCtx.themes}
+            onSetTheme={themeCtx.setTheme}
+            onPreviewTheme={themeCtx.previewTheme}
+            onResetPreview={themeCtx.resetPreview}
+            isLoading={isLoading}
+            isPlaying={isPlaying}
+            onOpenDashboard={() => setDashboardOpen(true)}
           />
         )}
 
-        {notice && (
-          <div
-            role="status"
-            aria-live="polite"
-            aria-atomic="true"
-            className={`fixed top-4 right-4 z-60 px-4 py-2 rounded-sm font-mono text-sm ${notice.type === 'success' ? 'bg-emerald-600 text-zinc-950' : notice.type === 'error' ? 'bg-red-600 text-zinc-950' : 'bg-amber-500 text-zinc-950'}`}
-          >
-            {notice.text}
-          </div>
+        <ToastContainer toasts={toast.toasts} onDismiss={toast.removeToast} />
+
+        {dashboardOpen && (
+          <TokenDashboard onClose={() => setDashboardOpen(false)} />
         )}
 
         {isMobile ? (
@@ -645,8 +642,11 @@ function App() {
             bpm={bpm}
             isPlaying={isPlaying}
             isLive={liveSession.isLive}
-            theme={theme}
-            onToggleTheme={() => setTheme((prev) => (prev === 'rack' ? 'minimal' : 'rack'))}
+            theme={themeCtx.currentTheme === 'minimal-light' || themeCtx.currentTheme === 'arctic' ? 'minimal' : 'rack'}
+            onToggleTheme={() => {
+              const nextTheme = themeCtx.currentTheme === 'dark-industrial' ? 'minimal-light' : 'dark-industrial';
+              themeCtx.setTheme(nextTheme);
+            }}
             onTogglePlay={handlePlayLoopToggle}
             onToggleLive={liveSession.isLive ? liveSession.stopLive : liveSession.startLive}
             onDecreaseBpm={() => setBpm((prev) => Math.max(40, prev - 5))}
@@ -660,9 +660,9 @@ function App() {
         ) : (
           <>
             {/* Workspace Desk Manager Panel */}
-            <div className="w-full border-b border-zinc-800 bg-zinc-950 px-4 md:px-6 py-3 flex flex-col sm:flex-row items-center justify-between select-none space-y-2.5 sm:space-y-0 shadow-inner z-10">
+            <div className="w-full border-b border-[var(--border-color)] bg-[var(--bg-primary)] px-4 md:px-6 py-3 flex flex-col sm:flex-row items-center justify-between select-none space-y-2.5 sm:space-y-0 shadow-inner z-10">
               <div className="flex items-center space-x-2">
-                <span className="text-[10px] font-mono font-bold tracking-widest text-zinc-400 uppercase">
+                <span className="text-[10px] font-mono font-bold tracking-widest text-[var(--text-secondary)] uppercase">
                   [ WORKSPACE DESK MANAGER ]
                 </span>
               </div>
@@ -687,7 +687,7 @@ function App() {
                     onDragCancel={() => { setDragActiveId(null); setDragOverId(null); }}
                   >
                     <SortableContext items={modules.map(m => m.id)} strategy={rectSortingStrategy}>
-                      {modules.map((mod, idx) => (
+                      {modules.map((mod) => (
                         <div key={mod.id} className="relative">
                           {/* Drop placeholder appears before the hovered target */}
                           {dragOverId === mod.id && dragActiveId && dragActiveId !== mod.id && (
@@ -768,7 +768,9 @@ function App() {
               <div className="grow min-w-75 md:flex-[2_2_0%]">
                 <MoodSelector 
                   value={concept.mood} 
-                  onChange={handleMoodChange} 
+                  onChange={handleMoodChange}
+                  customMood={customMood}
+                  onCustomMoodChange={setCustomMood}
                   onBypass={() => handleBypass('control_panel')}
                   collapsed={isPanelCollapsed('mood_selector')}
                   onToggleCollapse={() => togglePanelCollapsed('mood_selector')}
@@ -951,6 +953,12 @@ function App() {
                     <ChordGrid 
                       chords={concept.chords} 
                       transposeSteps={transposeSteps} 
+                      variationIndices={chordVariations}
+                      onVariationChange={(chordIdx, newVarIdx) => {
+                        const nextVars = [...chordVariations];
+                        nextVars[chordIdx] = newVarIdx;
+                        setChordVariations(nextVars);
+                      }}
                       onBypass={() => handleBypass('chord_monitor')}
                       collapsed={isPanelCollapsed('chord_monitor')}
                       onToggleCollapse={() => togglePanelCollapsed('chord_monitor')}
@@ -968,15 +976,15 @@ function App() {
                   )}
       
                   {/* Extra Hardware/Rack details for visual premium texture */}
-                  <div className="border border-zinc-800 bg-zinc-950 p-4 rounded-sm flex justify-between items-center text-3xs font-mono text-zinc-600">
+                  <div className="border border-[var(--border-color)] bg-[var(--bg-primary)] p-4 rounded-sm flex justify-between items-center text-3xs font-mono text-[var(--text-muted)]">
                     <div className="flex space-x-3">
                       <span>RACK: 01A</span>
                       <span>PATCH: COLD-STATE</span>
-                      <span className={isLoading ? "text-amber-500 animate-pulse" : ""}>
-                        STATUS: {isLoading ? "RECEIVING SIGNAL..." : "READY"}
+                      <span className={isLoading ? 'text-[var(--accent-primary)] animate-pulse' : isPlaying ? 'text-[var(--accent-secondary)]' : ''}>
+                        STATUS: {isLoading ? 'GENERATING' : isPlaying ? 'ACTIVE' : 'READY'}
                       </span>
                     </div>
-                    <div className={`w-1.5 h-1.5 ${isLoading ? 'bg-amber-500 animate-ping' : 'bg-emerald-500'}`}></div>
+                    <div className={`w-1.5 h-1.5 ${isLoading ? 'bg-[var(--accent-primary)] animate-ping' : isPlaying ? 'bg-[var(--accent-secondary)] animate-pulse' : 'bg-[var(--status-active)]'}`}></div>
                   </div>
                 </div>
               )}
@@ -1003,32 +1011,26 @@ function App() {
                   </div>
       
                   {/* Actions Controller deck */}
-                  <div className="border border-zinc-700 bg-zinc-800 p-4 rounded-sm shadow-md flex items-center justify-between">
-                    <div className="flex flex-col space-y-0.5">
-                      <span className="text-[10px] font-mono text-zinc-400 uppercase tracking-wider">
-                        [SEQUENCER CONTROL]
-                      </span>
-                      <span className="text-3xs font-mono text-zinc-500">
-                        {isPlaying ? 'BACKING LOOP RUNNING' : 'LOOP PLAYER & WRITER DECK'}
-                      </span>
-                    </div>
+                  <div className="border border-[var(--border-color)] bg-[var(--bg-tertiary)] p-4 rounded-sm shadow-md flex flex-col space-y-3">
+                    <span className="text-xs font-mono text-[var(--text-muted)] uppercase tracking-wider">
+                      [SEQUENCER CONTROL] {isPlaying ? 'BACKING LOOP RUNNING' : 'LOOP PLAYER & WRITER DECK'}
+                    </span>
       
-                    <div className="flex items-center space-x-3">
-                      {/* Play/Stop Loop Button */}
+                    <div className="flex items-center gap-3">
                       <TactileButton
                         variant={isPlaying ? 'red' : 'green'}
                         onClick={handlePlayLoopToggle}
                         disabled={isPlaybackDisabled}
-                        className="font-bold min-w-27.5"
+                        className="font-bold flex-1"
                       >
                         {isPlaying ? 'STOP LOOP' : 'PLAY LOOP'}
                       </TactileButton>
-      
-                      {/* Physical Clicky Tactile Button */}
+
                       <TactileButton
                         variant={concept.hasContinued ? 'zinc' : 'orange'}
                         onClick={handleContinueLyrics}
                         disabled={concept.hasContinued}
+                        className="flex-1"
                       >
                         {concept.hasContinued ? 'LETRA COMPLETADA' : 'CONTINUAR LETRA'}
                       </TactileButton>
@@ -1036,7 +1038,7 @@ function App() {
                       <TactileButton
                         variant="zinc"
                         onClick={handleExportSession}
-                        className="font-bold min-w-27.5"
+                        className="font-bold flex-1"
                       >
                         EXPORT JSON
                       </TactileButton>
@@ -1044,7 +1046,7 @@ function App() {
                       <TactileButton
                         variant="zinc"
                         onClick={handleImportSessionClick}
-                        className="font-bold min-w-27.5"
+                        className="font-bold flex-1"
                       >
                         IMPORT JSON
                       </TactileButton>

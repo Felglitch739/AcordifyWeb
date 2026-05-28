@@ -5,12 +5,24 @@ import { PanelWrapper } from './PanelWrapper';
 interface MoodSelectorProps {
   value: string;
   onChange: (mood: string) => void;
+  customMood: string;
+  onCustomMoodChange: (value: string) => void;
   onBypass?: () => void;
   collapsed?: boolean;
   onToggleCollapse?: () => void;
 }
 
-export const MoodSelector: React.FC<MoodSelectorProps> = ({ value, onChange, onBypass, collapsed = false, onToggleCollapse }) => {
+const MAX_CUSTOM_CHARS = 40;
+
+export const MoodSelector: React.FC<MoodSelectorProps> = ({
+  value,
+  onChange,
+  customMood,
+  onCustomMoodChange,
+  onBypass,
+  collapsed = false,
+  onToggleCollapse,
+}) => {
   const options = [
     { id: 'Jazzy Melancólico', label: 'JAZZ MELANCOLICO', desc: 'Muted minor extensions & slow temp' },
     { id: 'Indie Rock Energético', label: 'INDIE ROCK ENERGETICO', desc: 'Overdriven drive, grit & raw power' },
@@ -23,27 +35,42 @@ export const MoodSelector: React.FC<MoodSelectorProps> = ({ value, onChange, onB
     { id: 'Folk Íntimo', label: 'FOLK INTIMO', desc: 'Acoustic warmth, storytelling focus' },
   ];
 
+  const isCustomActive = customMood.trim().length > 0;
+
   const handleSelect = (id: string) => {
-    if (value !== id) {
+    if (value !== id || isCustomActive) {
       playClickSound('down');
-      setTimeout(() => playClickSound('up'), 50); // double click sound for heavy switch
+      setTimeout(() => playClickSound('up'), 50);
+      // Clear custom mood when selecting a preset
+      if (isCustomActive) {
+        onCustomMoodChange('');
+      }
       onChange(id);
+    }
+  };
+
+  const handleCustomChange = (text: string) => {
+    const clamped = text.slice(0, MAX_CUSTOM_CHARS);
+    onCustomMoodChange(clamped);
+    if (clamped.trim().length > 0) {
+      // Trigger mood change with custom text
+      onChange(clamped);
     }
   };
 
   return (
     <PanelWrapper
-      className="bg-zinc-800"
+      className="bg-[var(--bg-tertiary)]"
       collapsed={collapsed}
       onToggleCollapse={onToggleCollapse}
       onBypass={onBypass}
       title={(
-        <label className="text-2xs font-mono font-bold tracking-wider text-zinc-400 uppercase">
+        <label className="text-2xs font-mono font-bold tracking-wider text-[var(--text-secondary)] uppercase">
           [CONTROL PANEL] // MOOD CHASSIS SELECT
         </label>
       )}
       rightSlot={(
-        <span className="hidden xs:inline-block text-[10px] font-mono text-amber-500 font-bold uppercase animate-pulse">
+        <span className="hidden xs:inline-block text-[10px] font-mono text-[var(--accent-primary)] font-bold uppercase animate-pulse">
           • ACTIVE SELECT
         </span>
       )}
@@ -52,7 +79,7 @@ export const MoodSelector: React.FC<MoodSelectorProps> = ({ value, onChange, onB
       {/* Retro Physical Tape-Deck Selector Buttons */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5">
         {options.map((option) => {
-          const isSelected = value === option.id;
+          const isSelected = value === option.id && !isCustomActive;
           return (
             <button
               key={option.id}
@@ -60,39 +87,72 @@ export const MoodSelector: React.FC<MoodSelectorProps> = ({ value, onChange, onB
               onClick={() => handleSelect(option.id)}
               className={`text-left p-3 border font-mono rounded-sm transition-all relative ${
                 isSelected
-                  ? 'bg-zinc-950 border-amber-500 text-stone-200 shadow-inner'
-                  : 'bg-zinc-900 border-zinc-700 text-zinc-400 hover:text-zinc-200 hover:border-zinc-500'
+                  ? 'bg-[var(--bg-primary)] border-[var(--accent-primary)] text-[var(--text-primary)] shadow-inner'
+                  : 'bg-[var(--bg-secondary)] border-[var(--border-color)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:border-[var(--text-muted)]'
               }`}
             >
               <div className="flex items-center justify-between mb-1">
                 <span className="text-2xs font-semibold tracking-wide">
                   {option.label}
                 </span>
-                <span className={`w-2 h-2 rounded-sm ${isSelected ? 'bg-amber-500' : 'bg-zinc-800'}`}></span>
+                <span className={`w-2 h-2 rounded-sm ${isSelected ? 'bg-[var(--accent-primary)]' : 'bg-[var(--bg-primary)]'}`}></span>
               </div>
-              <p className="text-[10px] text-zinc-500 font-sans tracking-tight">
+              <p className="text-[10px] text-[var(--text-muted)] font-sans tracking-tight">
                 {option.desc}
               </p>
               {isSelected && (
-                <div className="absolute left-0 top-0 bottom-0 w-0.5 bg-amber-500"></div>
+                <div className="absolute left-0 top-0 bottom-0 w-0.5 bg-[var(--accent-primary)]"></div>
               )}
             </button>
           );
         })}
       </div>
 
+      {/* Custom Genre Input */}
+      <div className="pt-2 border-t border-[var(--border-color)] flex flex-col space-y-1.5">
+        <div className="flex items-center justify-between">
+          <span className="text-[10px] font-mono text-[var(--text-muted)] uppercase tracking-widest">
+            [CUSTOM] // GÉNERO LIBRE
+          </span>
+          <span className="text-[9px] font-mono text-[var(--text-muted)]">
+            {customMood.length}/{MAX_CUSTOM_CHARS}
+          </span>
+        </div>
+        <input
+          type="text"
+          value={customMood}
+          onChange={(e) => handleCustomChange(e.target.value)}
+          placeholder="ej: bolero, trap melancólico, bossa nova..."
+          maxLength={MAX_CUSTOM_CHARS}
+          className={`w-full bg-[var(--bg-primary)] border text-[var(--text-primary)] text-xs font-mono p-2 rounded-sm focus:outline-none transition-colors ${
+            isCustomActive
+              ? 'border-[var(--accent-primary)] shadow-[0_0_0_1px_var(--accent-primary)]'
+              : 'border-[var(--border-color)] focus:border-[var(--accent-primary)]'
+          }`}
+        />
+      </div>
+
       {/* Classic Studio Fallback Select Input */}
-      <div className="pt-2 flex flex-col space-y-1.5">
-        <span className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest">
+      <div className="flex flex-col space-y-1.5">
+        <span className="text-[10px] font-mono text-[var(--text-muted)] uppercase tracking-widest">
           Analogue Dial Bypass:
         </span>
         <select
-          value={value}
-          onChange={(e) => handleSelect(e.target.value)}
-          className="w-full bg-zinc-900 border border-zinc-700 text-stone-200 text-xs font-mono p-2 rounded-sm focus:outline-none focus:border-amber-500 cursor-pointer"
+          value={isCustomActive ? '' : value}
+          onChange={(e) => {
+            if (e.target.value) {
+              handleSelect(e.target.value);
+            }
+          }}
+          className="w-full bg-[var(--bg-secondary)] border border-[var(--border-color)] text-[var(--text-primary)] text-xs font-mono p-2 rounded-sm focus:outline-none focus:border-[var(--accent-primary)] cursor-pointer"
         >
+          {isCustomActive && (
+            <option value="" className="bg-[var(--bg-secondary)]">
+              CUSTOM: {customMood}
+            </option>
+          )}
           {options.map((option) => (
-            <option key={option.id} value={option.id} className="bg-zinc-900 text-stone-200">
+            <option key={option.id} value={option.id} className="bg-[var(--bg-secondary)] text-[var(--text-primary)]">
               {option.label}
             </option>
           ))}

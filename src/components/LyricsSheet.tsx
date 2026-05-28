@@ -352,7 +352,7 @@ export const LyricsSheet: React.FC<LyricsSheetProps> = ({
               </div>
             )}
 
-            <div className="relative border border-zinc-800 bg-zinc-950">
+            <div className="relative border border-zinc-800 bg-zinc-950 min-h-[400px] h-120">
               <div
                 ref={highlightRef}
                 className="absolute inset-0 overflow-auto whitespace-pre-wrap break-words px-3 py-3 pointer-events-none"

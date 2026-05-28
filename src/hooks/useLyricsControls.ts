@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { buildLyricsPrompt, parseLyricsResponse, type LyricsParams, type LyricsResult } from '../services';
+import { recordTokenUsage } from '../services/tokenTracker';
 
 export interface UseLyricsControlsOptions {
   activeChords: string[];
@@ -203,6 +204,12 @@ export function useLyricsControls(options: UseLyricsControlsOptions): UseLyricsC
 
       const payload: unknown = await response.json();
       console.log('[useLyricsControls] raw response:', payload);
+
+      // Track token usage
+      if (isRecord(payload) && isRecord((payload as Record<string, unknown>).usage)) {
+        recordTokenUsage('lyricsGeneration', 'gpt-4o-mini', (payload as Record<string, unknown>).usage as Record<string, number>);
+      }
+
       const content = extractAssistantContent(payload);
       const clean = cleanAssistantContent(content);
       const parsed = parseLyricsResponse(clean, paramsToUse);

@@ -7,6 +7,34 @@
    Analogue Studio / Editorial Design System
    ────────────────────────────────────────────────────────────────────────── */
 
+/* ─── Theme CSS Variables (Dark Industrial default) ───────────────────────── */
+:root {
+  --bg-primary: #0a0a0a;
+  --bg-secondary: #111111;
+  --bg-tertiary: #1a1a1a;
+  --accent-primary: #f97316;
+  --accent-secondary: #22c55e;
+  --text-primary: #ffffff;
+  --text-secondary: #a1a1aa;
+  --text-muted: #52525b;
+  --border-color: #27272a;
+  --status-active: #22c55e;
+}
+
+/* ─── Tailwind v4 theme extension ─────────────────────────────────────────── */
+@theme {
+  --color-th-bg-primary: var(--bg-primary);
+  --color-th-bg-secondary: var(--bg-secondary);
+  --color-th-bg-tertiary: var(--bg-tertiary);
+  --color-th-accent-primary: var(--accent-primary);
+  --color-th-accent-secondary: var(--accent-secondary);
+  --color-th-text-primary: var(--text-primary);
+  --color-th-text-secondary: var(--text-secondary);
+  --color-th-text-muted: var(--text-muted);
+  --color-th-border: var(--border-color);
+  --color-th-status-active: var(--status-active);
+}
+
 /* ─── Base Reset & Document Defaults ──────────────────────────────────────── */
 @layer base {
   *,
@@ -28,8 +56,8 @@
     padding: 0;
 
     /* ── Design system: background & primary text ── */
-    background-color: #18181b; /* bg-background */
-    color: #f4f4f5;            /* text-main */
+    background-color: var(--bg-primary);
+    color: var(--text-primary);
 
     font-family: 'Inter', 'Helvetica Neue', Arial, sans-serif;
     font-size: 1rem;
@@ -44,7 +72,7 @@
 
   /* Meaningful focus rings — no blue browser default */
   :focus-visible {
-    outline: 2px solid #4a5c3a; /* primary */
+    outline: 2px solid var(--accent-primary);
     outline-offset: 2px;
   }
 
@@ -57,7 +85,7 @@
   h1, h2, h3, h4, h5, h6 {
     font-family: 'Inter', 'Helvetica Neue', Arial, sans-serif;
     font-weight: 600;
-    color: #f4f4f5; /* text-main */
+    color: var(--text-primary);
     margin: 0;
     line-height: 1.15;
     letter-spacing: -0.02em;
@@ -104,8 +132,8 @@
 
   /* Surface card — replaces the default div background */
   .card {
-    background-color: #27272a; /* surface */
-    border: 1px solid #3f3f46; /* border */
+    background-color: var(--bg-secondary);
+    border: 1px solid var(--border-color);
     border-radius: 4px;
   }
 
@@ -116,7 +144,7 @@
     font-weight: 600;
     letter-spacing: 0.15em;
     text-transform: uppercase;
-    color: #a1a1aa;         /* text-muted */
+    color: var(--text-secondary);
   }
 
   /* Chord chip — monospace token, tactile */
@@ -129,20 +157,20 @@
     justify-content: center;
     padding: 0.25rem 0.625rem;
     border-radius: 2px; /* sharp — sm */
-    background-color: #27272a; /* surface */
-    border: 1px solid #3f3f46; /* border */
-    color: #f4f4f5;            /* text-main */
+    background-color: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    color: var(--text-primary);
     transition: border-color 180ms cubic-bezier(0.25, 0.1, 0.25, 1.0);
   }
 
   .chord-chip:hover {
-    border-color: #4a5c3a; /* primary */
+    border-color: var(--accent-primary);
   }
 
   /* Divider — recessed hairline */
   .divider {
     border: none;
-    border-top: 1px solid #2d2d30; /* border-dim */
+    border-top: 1px solid var(--border-color);
     margin: 0;
   }
 }
@@ -182,29 +210,16 @@
     font-variant-numeric: tabular-nums;
     font-feature-settings: "tnum" 1;
   }
+}
 
-  /* Minimal theme overrides (light, flat, sharp) */
-  .theme-minimal {
-    background-color: #f5f5f4;
-    color: #111827;
+/* ─── Toast slide-in animation ────────────────────────────────────────────── */
+@keyframes slideIn {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
   }
-
-  .theme-minimal .bg-zinc-900 { background-color: #f5f5f4; }
-  .theme-minimal .bg-zinc-950 { background-color: #ffffff; }
-  .theme-minimal .bg-zinc-800 { background-color: #f2f2f1; }
-  .theme-minimal .bg-zinc-700 { background-color: #e5e7eb; }
-
-  .theme-minimal .border-zinc-700 { border-color: #e5e7eb; }
-  .theme-minimal .border-zinc-800 { border-color: #e5e7eb; }
-  .theme-minimal .border-zinc-900 { border-color: #d1d5db; }
-
-  .theme-minimal .text-stone-200 { color: #111827; }
-  .theme-minimal .text-zinc-400 { color: #4b5563; }
-  .theme-minimal .text-zinc-500 { color: #6b7280; }
-  .theme-minimal .text-zinc-600 { color: #6b7280; }
-
-  .theme-minimal .shadow-md,
-  .theme-minimal .shadow-inner {
-    box-shadow: none;
+  to {
+    transform: translateX(0);
+    opacity: 1;
   }
 }

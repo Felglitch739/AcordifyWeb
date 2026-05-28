@@ -6,3 +6,6 @@ export { useStrumSync } from './useStrumSync';
 export { useLiveSession } from './useLiveSession';
 export { useStorage } from './useStorage';
 export { useIsMobile } from './useIsMobile';
+export { useTheme } from './useTheme';
+export { useToast } from './useToast';
+export { useTokenTracker } from './useTokenTracker';

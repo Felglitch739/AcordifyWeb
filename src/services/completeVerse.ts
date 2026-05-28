@@ -3,6 +3,8 @@
 // Prompt engineering + TypeScript integration for Acordify
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+import { recordTokenUsage } from './tokenTracker';
+
 // ─────────────────────────────────────────────────────────────────────
 // TYPES & INTERFACES
 // ─────────────────────────────────────────────────────────────────────
@@ -393,6 +395,12 @@ export async function completeVerse(
   }
 
   const data = await response.json();
+
+  // Track token usage
+  if (data.usage) {
+    recordTokenUsage('completeVerse', 'gpt-4o-mini', data.usage);
+  }
+
   const rawContent: string = data.choices[0].message.content.trim();
 
   return parseCompleteVerseResponse(rawContent, params.userLines, params.activeChords);
