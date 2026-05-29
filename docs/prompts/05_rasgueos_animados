@@ -1,0 +1,199 @@
+ROLE:
+You are a senior frontend engineer specialized in music interfaces,
+real-time audio synchronization, and React animation systems.
+You have deep knowledge of Tone.js Transport, Web Audio API timing,
+and CSS/JS animation techniques for beat-accurate visual feedback.
+
+PROJECT CONTEXT:
+Acordify is a React + TypeScript + Vite web app for musicians.
+Visual language: industrial rack/hardware aesthetic, dark backgrounds,
+monospace typography, orange (#f97316) and green (#22c55e) accents,
+bracket notation [ BUTTON ] and [MODULE] // DESCRIPTION labels.
+Zero inline styles. Tailwind only. Zero `any`. Functional components.
+Logic in hooks, UI in components, pure functions in utils.
+
+The app already has:
+- Tone.js Transport as the single timing source of truth
+- A BPM value managed in existing app state
+- A Mood Chassis Select with moods: "Jazz Melancólico",
+  "Indie Rock Energético", "Pop Acústico Relajado"
+- A metrónomo visual already synced to Tone.js Transport
+
+TASK:
+Implement the StrumsVisualizer: an animated strumming pattern
+display that shows up/down arrows synced to the active BPM,
+with patterns that vary per mood/genre.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+FILES TO CREATE:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+[1] /src/components/StrumsVisualizer.tsx
+    UI only. Renders the animated arrows and pattern info.
+    Receives all data via props. Zero business logic.
+
+[2] /src/hooks/useStrumSync.ts
+    Syncs the strum pattern to Tone.js Transport.
+    Single source of truth for strum state.
+    Handles start/stop/pattern switching.
+
+[3] /src/utils/strumPatterns.ts
+    Pure data + pure functions.
+    Defines all patterns and exposes helper functions.
+    Zero side effects, zero imports from React or Tone.js.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+TYPESCRIPT INTERFACES (define in strumPatterns.ts, export all):
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+type StrumDirection = 'down' | 'up' | 'mute' | 'rest'
+
+interface StrumBeat {
+  beat: number           // position in bar: 1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5
+  direction: StrumDirection
+  accent: boolean        // true = stronger hit, visual emphasis
+  palmMute: boolean      // visual indicator only, shown as [PM]
+}
+
+interface StrumPattern {
+  id: string
+  mood: string           // matches Mood Chassis mood name exactly
+  name: string           // human readable: "Swing Melancólico"
+  timeSignature: '4/4' | '3/4'
+  beatsPerBar: number
+  beats: StrumBeat[]
+  description: string    // shown in UI: "Énfasis en tiempos débiles"
+  difficulty: 'básico' | 'intermedio' | 'avanzado'
+}
+
+interface StrumState {
+  isPlaying: boolean
+  currentBeat: number    // 0-indexed position in beats array
+  currentBar: number     // bar count since start
+  activeMood: string
+  pattern: StrumPattern
+}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+STRUM PATTERNS TO IMPLEMENT (strumPatterns.ts):
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Implement ALL of these patterns with musically accurate beat
+placements. Each beat array must be complete and correct.
+
+1. Jazz Melancólico
+   Pattern name: "Swing Melancólico"
+   Feel: syncopated, emphasis on offbeats, lazy swing feel
+   Characteristic: down on 1, up on the "and" of 2,
+   down on 3, sparse hits. Mutes on beat 4.
+   Time: 4/4, 8 StrumBeats per bar
+
+2. Indie Rock Energético  
+   Pattern name: "Drive Alternado"
+   Feel: aggressive alternating, palm mutes on beats 1 and 3,
+   accented downs on 2 and 4 (backbeat emphasis)
+   Time: 4/4, 8 StrumBeats per bar
+
+3. Pop Acústico Relajado
+   Pattern name: "Arpegio Fluido"
+   Feel: gentle alternating, no palm mutes, accent on beat 1,
+   soft ups filling the space, airy and open
+   Time: 4/4, 8 StrumBeats per bar
+
+4. Balada Oscura (new mood, add to available patterns)
+   Pattern name: "Pulso Lento"
+   Feel: 3/4 waltz feel, single strong down on beat 1,
+   soft ups on 2 and 3, melancholic and sparse
+   Time: 3/4, 3 StrumBeats per bar
+
+5. Folk Íntimo (new mood)
+   Pattern name: "Fingerpicking Simulado"
+   Feel: bass note hit (accent) then two soft ups,
+   creates the illusion of fingerpicking with a pick
+   Time: 4/4, 6 StrumBeats per bar
+
+Expose these helpers:
+  getPatternByMood(mood: string): StrumPattern
+  getAllPatterns(): StrumPattern[]
+  getNextBeat(pattern: StrumPattern, currentIndex: number): number
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ANIMATION SYSTEM (StrumsVisualizer.tsx):
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Layout: horizontal row of beat slots, one per StrumBeat in pattern.
+
+Each beat slot shows:
+  - Arrow: ↓ for down, ↑ for up, ✕ for mute, — for rest
+  - Beat number below (1, 1.5, 2, 2.5...)
+  - [PM] label above if palmMute === true
+  - Accent indicator: slightly larger arrow if accent === true
+
+Active beat behavior (currentBeat from useStrumSync):
+  - Scale up: transform scale-125
+  - Color: orange (#f97316) for down/accent, green (#22c55e) for up
+  - Glow: drop-shadow in matching color
+  - Transition: must be instantaneous on activation (no ease-in),
+    fade out over ~200ms after beat passes
+
+Inactive beats:
+  - Color: zinc-600
+  - No glow, no scale
+
+Bar counter display:
+  - Top right of panel: "BAR 003" in monospace
+  - Updates every full bar
+
+Pattern info bar:
+  - Below arrows: pattern name + difficulty badge + description
+  - e.g. "[SWING MELANCÓLICO] · INTERMEDIO · Énfasis en tiempos débiles"
+
+Controls row:
+  - [ ◀ PATRÓN ANTERIOR ] [ PATRÓN ACTIVO: SWING MELANCÓLICO ] [ SIGUIENTE PATRÓN ▶ ]
+  - Allows manual override of auto-selected pattern
+
+Panel header:
+  [STRUMS] // VISUALIZADOR DE RASGUEO    [ BYPASS ]
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SYNC LOGIC (useStrumSync.ts):
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+- Subscribe to Tone.js Transport via Tone.Transport.scheduleRepeat
+- Schedule each StrumBeat relative to bar start using beat position
+- On mood change: switch pattern at the next bar boundary,
+  NEVER mid-bar (prevents visual glitch)
+- On BPM change: Tone.Transport handles it automatically,
+  no manual recalculation needed
+- On stop: reset currentBeat to 0, currentBar to 0
+- Cleanup: cancel all scheduled events on unmount
+
+CRITICAL timing rule:
+  Use Tone.Transport.scheduleRepeat with interval "1m" (one measure)
+  and inside it schedule each beat offset using Tone.Time arithmetic.
+  NEVER use setInterval or setTimeout for beat sync.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+CONSTRAINTS:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+- Zero `any`. Strict TypeScript throughout.
+- Zero inline styles. Tailwind only.
+  Exception: drop-shadow glow values may use style prop
+  only if Tailwind cannot express the exact dynamic color.
+- NEVER use setInterval/setTimeout for beat timing.
+  Only Tone.js Transport scheduling.
+- strumPatterns.ts must be pure: no React, no Tone.js imports.
+- StrumsVisualizer must be fully controlled via props.
+- useStrumSync must clean up ALL Tone.js events on unmount.
+- Auto-select pattern when mood changes, but allow manual override.
+- The visualizer must work whether the main loop is playing or not:
+  it has its own play state independent of the chord loop player.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+OUTPUT:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Deliver the 3 files completely implemented, zero placeholders.
+After the code, include a short integration note explaining:
+- Where in the existing layout StrumsVisualizer should be mounted
+- Which existing context/store provides activeMood and bpm
+- How to connect useStrumSync to the existing play/stop controls

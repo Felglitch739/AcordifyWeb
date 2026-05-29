@@ -1,8 +1,13 @@
-import { useState, useEffect } from 'react';
+import { useEffect, useRef, useState, type ChangeEvent } from 'react';
 import type { SongConcept } from './types';
-import { Header, MoodSelector, ChordGrid, ScalePanel, LyricsSheet, TactileButton } from './components';
-import { generateSongConcept } from './services';
-import { useAudioEngine } from './hooks';
+import { Header, MoodSelector, ChordGrid, ScalePanel, LyricsSheet, TactileButton, LyricsControlPanel, LiveSessionOverlay, SessionVaultPanel, StrumsVisualizer, PanelWrapper, SortableToggle, SongLookup, MobileWorkspace, ToastContainer, TokenDashboard } from './components';
+import useWorkspaceLayout from './hooks/useWorkspaceLayout';
+import { DndContext, PointerSensor, KeyboardSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
+import { SortableContext, rectSortingStrategy, sortableKeyboardCoordinates } from '@dnd-kit/sortable';
+import { completeVerse, generateSongConcept } from './services';
+import { useAudioEngine, useIsMobile, useLiveSession, useLyricsControls, useStorage, useStrumSync, useTheme, useToast } from './hooks';
+import { buildSessionSnapshot, detectKey, parseSessionSnapshot, serializeSessionSnapshot, validateProgression } from './utils';
+import { isLightTheme } from './utils/themeEngine';
 
 const MOOD_DATA: Record<string, { chords: string[]; scale: string; lyrics: string; continuation: string }> = {
   'Jazzy Melancólico': {
@@ -36,9 +41,17 @@ function App() {
     lyrics: initialData.lyrics,
     hasContinued: false
   });
+  const [chordProContent, setChordProContent] = useState(initialData.lyrics);
 
   const [transposeSteps, setTransposeSteps] = useState(0);
+  const [chordVariations, setChordVariations] = useState<number[]>([0, 0, 0, 0]);
   const [isLoading, setIsLoading] = useState(false);
+  const themeCtx = useTheme();
+  const toast = useToast();
+  const [customMood, setCustomMood] = useState('');
+  const [dashboardOpen, setDashboardOpen] = useState(false);
+  const isMobile = useIsMobile();
+  const [toolsOpen, setToolsOpen] = useState(false);
   
   interface ModuleConfig {
     id: string;
@@ -48,11 +61,21 @@ function App() {
 
   const [modules, setModules] = useState<ModuleConfig[]>([
     { id: 'control_panel', name: 'CONTROL', isVisible: true },
+    { id: 'song_lookup', name: 'LOOKUP', isVisible: true },
     { id: 'transposer', name: 'PITCH', isVisible: true },
     { id: 'chord_monitor', name: 'MONITOR', isVisible: true },
     { id: 'lyrics_sheet', name: 'SHEET', isVisible: true },
     { id: 'scale_visualizer', name: 'RECEIVER', isVisible: true }
   ]);
+
+  const workspaceLayout = useWorkspaceLayout(modules.map(m => m.id), (nextOrder) => {
+    setModules(prev => nextOrder.map(id => prev.find(p => p.id === id) || { id, name: id, isVisible: true }));
+  });
+
+  const [dragActiveId, setDragActiveId] = useState<string | null>(null);
+  const [dragOverId, setDragOverId] = useState<string | null>(null);
+
+  const isTouchDevice = typeof window !== 'undefined' && typeof window.matchMedia === 'function' && window.matchMedia('(pointer: coarse)').matches;
 
   const isModuleVisible = (id: string) => {
     return modules.find(m => m.id === id)?.isVisible ?? false;
@@ -73,6 +96,132 @@ function App() {
   const [isPracticeMode, setIsPracticeMode] = useState(false);
   const [bpm, setBpm] = useState(90);
   const [isLedOn, setIsLedOn] = useState(false);
+  const sessionFileInputRef = useRef<HTMLInputElement>(null);
+  const [panelCollapsed, setPanelCollapsed] = useState<Record<string, boolean>>(() => {
+    try {
+      const raw = window.localStorage.getItem('acordify_panels');
+      return raw ? JSON.parse(raw) as Record<string, boolean> : {};
+    } catch {
+      return {};
+    }
+  });
+
+  const syncNotebookContent = (nextContent: string) => {
+    setChordProContent(nextContent);
+    setConcept(prev => ({
+      ...prev,
+      lyrics: nextContent,
+    }));
+  };
+
+  const getSafeChords = () => {
+    const hasPlaceholders = concept.chords.some((c) => /LOAD|ERR|SYS_ERR/i.test(c));
+    return hasPlaceholders ? ['C', 'G', 'Am', 'F'] : concept.chords;
+  };
+
+  const handleMapChords = (currentText: string): string => {
+    const safeChords = getSafeChords();
+    let chordIndex = 0;
+    return currentText.split('\n').map((line) => {
+      if (!line.trim()) {
+        return line;
+      }
+      if (/\[[^\]]+\]/.test(line)) {
+        return line;
+      }
+      const chord = safeChords[chordIndex % safeChords.length];
+      chordIndex += 1;
+      return `[${chord}]${line}`;
+    }).join('\n');
+  };
+
+  const handleAssistWithAI = async (currentText: string): Promise<string> => {
+    const rawLines = currentText.split('\n').map((line) => line.trim()).filter(Boolean);
+    if (rawLines.length === 0) {
+      throw new Error('Escribe al menos una linea para continuar.');
+    }
+
+    const userLines = rawLines.slice(-4);
+    const linesToComplete = userLines.length <= 2 ? 2 : 4;
+    const safeChords = getSafeChords();
+
+    const result = await completeVerse({
+      userLines,
+      activeChords: safeChords,
+      keyRoot: detected.root,
+      mode: detected.mode,
+      bpm,
+      mood: concept.mood,
+      language: lyricsControls.language,
+      rhymeScheme: lyricsControls.rhymeScheme === 'free' ? 'free' : lyricsControls.rhymeScheme,
+      linesToComplete,
+      styleHint: lyricsControls.genre?.trim() || undefined,
+    });
+
+    const appended = result.completedLines
+      .map((line) => `[${line.chord}]${line.text}`)
+      .join('\n');
+
+    const prefix = currentText.trim().length ? `${currentText.trimEnd()}\n` : '';
+    return `${prefix}${appended}`;
+  };
+
+  const handleSongLookupLoad = (res: import('./services').SongLookupResult) => {
+    if (!res) return;
+
+    if (!res.found) {
+      toast.addToast('error', 'No se encontraron datos confiables.');
+      return;
+    }
+
+    const chords = res.chords ?? [];
+    const keyRoot = (res.keyRoot as any) ?? (chords.length ? detectKey(chords).root : detectKey(concept.chords).root);
+    const mode = (res.mode as any) ?? (chords.length ? detectKey(chords).mode : detectKey(concept.chords).mode);
+
+    // Validate progression
+    let validation;
+    try {
+      validation = validateProgression(chords, keyRoot, mode as any);
+    } catch (e) {
+      validation = undefined;
+    }
+
+    const lowConfidence = (res.confidence ?? 0) < 0.7;
+    const lowCoherence = validation ? validation.overallCoherenceScore < 50 : false;
+
+    if (lowConfidence || lowCoherence) {
+      toast.addToast('warning', '⚠ Acordes aproximados — verifica antes de tocar');
+    } else {
+      toast.addToast('success', `✓ Canción cargada: ${res.title ?? 'Sin título'} — ${res.artist ?? ''}`);
+    }
+
+    // Apply to workspace
+    setBpm(res.bpmSuggested ?? bpm);
+    setChordVariations([0, 0, 0, 0]);
+    syncNotebookContent(res.chordProContent ?? chordProContent);
+    setConcept({
+      mood: concept.mood,
+      chords: chords.length ? chords : concept.chords,
+      scale: `${keyRoot} ${mode === 'major' ? 'Mayor' : 'Menor'}`,
+      lyrics: res.chordProContent ?? chordProContent,
+      hasContinued: true,
+    });
+  };
+
+  const togglePanelCollapsed = (panelId: string) => {
+    setPanelCollapsed(prev => ({
+      ...prev,
+      [panelId]: !prev[panelId],
+    }));
+  };
+
+  const isPanelCollapsed = (panelId: string) => panelCollapsed[panelId] ?? false;
+
+  useEffect(() => {
+    window.localStorage.setItem('acordify_panels', JSON.stringify(panelCollapsed));
+  }, [panelCollapsed]);
+
+  // Theme persistence handled by useTheme hook
 
   const triggerLedPulse = () => {
     setIsLedOn(true);
@@ -85,21 +234,40 @@ function App() {
     concept.chords,
     transposeSteps,
     bpm,
+    chordVariations,
     triggerLedPulse
   );
+
+  const detected = detectKey(concept.chords);
+  const lyricsControls = useLyricsControls({
+    activeChords: concept.chords,
+    keyRoot: detected.root,
+    mode: detected.mode,
+    bpm,
+    mood: concept.mood,
+  });
+  const strums = useStrumSync({
+    initialMood: concept.mood,
+    bpm,
+  });
+  const liveSession = useLiveSession({
+    chords: concept.chords,
+    bpm,
+  });
+  const storage = useStorage();
+
+  useEffect(() => {
+    strums.setMood(concept.mood);
+  }, [concept.mood]);
 
   // Synchronized metronome logic
   useEffect(() => {
     // If loop player is active, Tone.js drives the LED pulse via callback.
     // If stopped but practice mode is active, fallback to JS timer.
     if (!isPracticeMode || isPlaying) {
-      if (!isPracticeMode) {
-        setIsLedOn(false);
-      }
       return;
     }
 
-    triggerLedPulse();
     const intervalId = setInterval(triggerLedPulse, (60 / bpm) * 1000);
 
     return () => {
@@ -120,6 +288,9 @@ function App() {
 
   const handlePlayLoopToggle = () => {
     if (isPlaying) {
+      if (liveSession.isLive) {
+        liveSession.stopLive();
+      }
       stopPlayback();
       setIsPracticeMode(false);
     } else {
@@ -132,6 +303,7 @@ function App() {
 
   const handleMoodChange = async (newMood: string) => {
     setTransposeSteps(0);
+    setChordVariations([0, 0, 0, 0]);
     setIsLoading(true);
 
     // 1. Enter hardware "loading" state
@@ -142,10 +314,11 @@ function App() {
       lyrics: '\n\n[LOAD]ESTABLECIENDO CONEXIÓN...\n[LOAD]PROCESANDO TIMBRE MENTAL...\n[LOAD]EXTRAYENDO ACORDES...\n[LOAD]ESPERE...',
       hasContinued: false
     });
+    setChordProContent('\n\n[LOAD]ESTABLECIENDO CONEXIÓN...\n[LOAD]PROCESANDO TIMBRE MENTAL...\n[LOAD]EXTRAYENDO ACORDES...\n[LOAD]ESPERE...');
 
     try {
       // 2. Fetch from AI Service
-      const aiConcept = await generateSongConcept(newMood);
+      const aiConcept = await generateSongConcept(newMood, lyricsControls.genre, concept.chords);
       
       // 3. Update with real signal
       setConcept({
@@ -155,6 +328,7 @@ function App() {
         lyrics: aiConcept.lyrics,
         hasContinued: false
       });
+      setChordProContent(aiConcept.lyrics);
     } catch (err) {
       console.error(err);
       // Show connection error in the UI so the user knows the AI failed
@@ -165,6 +339,7 @@ function App() {
         lyrics: `\n\n[ERR]ERROR DE CONEXIÓN CON AZURE.\n[ERR]Revisa la consola del navegador (F12) para más detalles.\n[ERR]Asegúrate de que VITE_AZURE_API_KEY y VITE_AZURE_ENDPOINT sean correctos.\n[ERR]y reinicia el servidor con 'npm run dev'.`,
         hasContinued: false
       });
+      setChordProContent(`\n\n[ERR]ERROR DE CONEXIÓN CON AZURE.\n[ERR]Revisa la consola del navegador (F12) para más detalles.\n[ERR]Asegúrate de que VITE_AZURE_API_KEY y VITE_AZURE_ENDPOINT sean correctos.\n[ERR]y reinicia el servidor con 'npm run dev'.`);
     } finally {
       setIsLoading(false);
     }
@@ -173,107 +348,541 @@ function App() {
   const handleContinueLyrics = () => {
     const data = MOOD_DATA[concept.mood];
     if (data && !concept.hasContinued) {
+      const nextLyrics = chordProContent + data.continuation;
+      syncNotebookContent(nextLyrics);
       setConcept(prev => ({
         ...prev,
-        lyrics: prev.lyrics + data.continuation,
+        lyrics: nextLyrics,
         hasContinued: true
       }));
     }
   };
 
+  const handleExportSession = () => {
+    const snapshot = buildSessionSnapshot({
+      title: `${concept.mood} Session`,
+      mood: concept.mood,
+      bpm,
+      keyRoot: detected.root,
+      mode: detected.mode,
+      chords: concept.chords,
+      capo: transposeSteps,
+      chordProContent: chordProContent,
+      language: lyricsControls.language,
+      rhymeScheme: lyricsControls.rhymeScheme,
+      transposition: transposeSteps,
+      autoScrollSpeed: isPracticeMode ? 1 : 0,
+    });
+
+    const json = serializeSessionSnapshot(snapshot);
+    const blob = new Blob([json], { type: 'application/json;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = `${snapshot.metadata.title.replace(/\s+/g, '_').toLowerCase()}.acordify.json`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleImportSessionClick = () => {
+    sessionFileInputRef.current?.click();
+  };
+
+  const handleImportSessionFile = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+
+    if (!file) {
+      return;
+    }
+
+    const raw = await file.text();
+    const snapshot = parseSessionSnapshot(raw);
+
+    if (isPlaying) {
+      stopPlayback();
+    }
+
+    if (liveSession.isLive) {
+      liveSession.stopLive();
+    }
+
+    setIsPracticeMode(false);
+    setTransposeSteps(snapshot.player.transposition);
+    setChordVariations([0, 0, 0, 0]);
+    setBpm(snapshot.player.bpm);
+    syncNotebookContent(snapshot.lyrics.chordProContent);
+    setConcept({
+      mood: snapshot.metadata.mood,
+      chords: snapshot.music.chords,
+      scale: `${snapshot.music.keyRoot} ${snapshot.music.mode === 'major' ? 'Mayor' : 'Menor'}`,
+      lyrics: snapshot.lyrics.chordProContent,
+      hasContinued: true,
+    });
+  };
+
+  const handleSaveCurrentSession = async () => {
+    await storage.saveSession(
+      buildSessionSnapshot({
+        title: `${concept.mood} Session`,
+        mood: concept.mood,
+        bpm,
+        keyRoot: detected.root,
+        mode: detected.mode,
+        chords: concept.chords,
+        capo: transposeSteps,
+        chordProContent: chordProContent,
+        language: lyricsControls.language,
+        rhymeScheme: lyricsControls.rhymeScheme,
+        transposition: transposeSteps,
+        autoScrollSpeed: isPracticeMode ? 1 : 0,
+      }),
+    );
+  };
+
+  const handleLoadStoredSession = async (id: string) => {
+    const snapshot = await storage.loadSession(id);
+
+    if (isPlaying) {
+      stopPlayback();
+    }
+
+    if (liveSession.isLive) {
+      liveSession.stopLive();
+    }
+
+    setIsPracticeMode(false);
+    setTransposeSteps(snapshot.player.transposition);
+    setChordVariations([0, 0, 0, 0]);
+    setBpm(snapshot.player.bpm);
+    syncNotebookContent(snapshot.lyrics.chordProContent);
+    setConcept({
+      mood: snapshot.metadata.mood,
+      chords: snapshot.music.chords,
+      scale: `${snapshot.music.keyRoot} ${snapshot.music.mode === 'major' ? 'Mayor' : 'Menor'}`,
+      lyrics: snapshot.lyrics.chordProContent,
+      hasContinued: true,
+    });
+  };
+
+  const handleDeleteStoredSession = async (id: string) => {
+    await storage.deleteSession(id);
+  };
+
+  const handleExportBackup = async () => {
+    const backup = await storage.exportBackup();
+    const url = URL.createObjectURL(backup.blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = backup.filename;
+    anchor.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleImportBackup = async (file: File) => {
+    await storage.importBackup(file);
+  };
+
     const isLeftVisible = isModuleVisible('chord_monitor') || isModuleVisible('scale_visualizer');
     const isRightVisible = isModuleVisible('lyrics_sheet');
+    const light = isLightTheme(themeCtx.currentTheme);
+    const rootClasses = `bg-[var(--bg-primary)] min-h-screen text-[var(--text-primary)] flex flex-col font-sans antialiased selection:bg-[var(--accent-primary)]/30 selection:text-[var(--accent-primary)] relative`;
 
-    return (
-      <div className="bg-zinc-900 min-h-screen text-stone-200 flex flex-col font-sans antialiased selection:bg-amber-600/30 selection:text-amber-500 relative">
-        {/* Powder-coated Texture Noise Overlay */}
-        <div 
-          className="fixed inset-0 pointer-events-none opacity-[0.035] mix-blend-overlay z-50"
-          style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E")` }}
-        ></div>
-        {/* Brutalist Top Navigation Bar */}
-        <Header />
+    const mobileLyrics = (
+      <LyricsSheet
+        lyrics={chordProContent}
+        transposeSteps={transposeSteps}
+        isPracticeMode={isPracticeMode}
+        isLive={liveSession.isLive}
+        activeChord={liveSession.state.activeChord}
+        onLyricsChange={syncNotebookContent}
+        onAssistWithAI={handleAssistWithAI}
+        onMapChords={handleMapChords}
+        availableChords={concept.chords}
+        isMobile
+      />
+    );
 
-        {/* Workspace Desk Manager Panel */}
-        <div className="w-full border-b border-zinc-800 bg-zinc-950 px-4 md:px-6 py-3 flex flex-col sm:flex-row items-center justify-between select-none space-y-2.5 sm:space-y-0 shadow-inner z-10">
-          <div className="flex items-center space-x-2">
-            <span className="text-[10px] font-mono font-bold tracking-widest text-zinc-400 uppercase">
-              [ WORKSPACE DESK MANAGER ]
-            </span>
+    const mobileTools = (
+      <>
+        <MoodSelector
+          value={concept.mood}
+          onChange={handleMoodChange}
+          customMood={customMood}
+          onCustomMoodChange={setCustomMood}
+        />
+        <LyricsControlPanel
+          rhymeScheme={lyricsControls.rhymeScheme}
+          emotionalMood={lyricsControls.emotionalMood}
+          narrativePerson={lyricsControls.narrativePerson}
+          metaphorDensity={lyricsControls.metaphorDensity}
+          thematicConcept={lyricsControls.thematicConcept}
+          genre={lyricsControls.genre}
+          language={lyricsControls.language}
+          linesToGenerate={lyricsControls.linesToGenerate}
+          isGenerating={lyricsControls.isGenerating}
+          error={lyricsControls.error}
+          result={lyricsControls.result}
+          onRhymeSchemeChange={lyricsControls.setRhymeScheme}
+          onEmotionalMoodChange={lyricsControls.setEmotionalMood}
+          onNarrativePersonChange={lyricsControls.setNarrativePerson}
+          onMetaphorDensityChange={lyricsControls.setMetaphorDensity}
+          onThematicConceptChange={lyricsControls.setThematicConcept}
+          onGenreChange={lyricsControls.setGenre}
+          onLanguageChange={lyricsControls.setLanguage}
+          onLinesToGenerateChange={lyricsControls.setLinesToGenerate}
+          onGenerate={async () => {
+            try {
+              const res = await lyricsControls.generateLyrics();
+              syncNotebookContent(res.chordProOutput);
+              setConcept((prev) => ({
+                ...prev,
+                lyrics: res.chordProOutput,
+                hasContinued: true,
+              }));
+            } catch (e) {
+              console.error('Failed to generate lyrics:', e);
+            }
+          }}
+        />
+        <PanelWrapper
+          className="bg-zinc-800"
+          title={(
+            <label className="text-2xs font-mono font-bold tracking-wider text-zinc-400 uppercase">
+              [PITCH] // SMART TRANSPOSER
+            </label>
+          )}
+          contentClassName="p-4 flex flex-col space-y-3"
+        >
+          <div className="grow flex items-center justify-center space-x-3">
+            <TactileButton variant="zinc" onClick={() => setTransposeSteps(s => s - 1)} className="px-3! py-2! text-2xs!">
+              -1 ST
+            </TactileButton>
+            <div className="bg-zinc-950 px-3 py-2 border border-zinc-800 rounded-sm font-mono text-xs text-amber-500 font-bold uppercase w-24 text-center shadow-inner">
+              CAPO: {transposeSteps > 0 ? `+${transposeSteps}` : transposeSteps}
+            </div>
+            <TactileButton variant="zinc" onClick={() => setTransposeSteps(s => s + 1)} className="px-3! py-2! text-2xs!">
+              +1 ST
+            </TactileButton>
           </div>
-          
-          <div className="flex flex-wrap items-center justify-center gap-2.5">
-            {modules.map(mod => (
-              <button
-                key={mod.id}
-                type="button"
-                onClick={() => toggleModule(mod.id)}
-                className={`flex items-center space-x-2 px-2.5 py-1 border rounded-sm font-mono text-[9px] uppercase tracking-wider font-semibold select-none transition-all duration-100 cursor-pointer ${
-                  mod.isVisible
-                    ? 'bg-zinc-900 text-stone-200 border-zinc-700 hover:bg-zinc-800 hover:border-zinc-600'
-                    : 'bg-zinc-950 text-zinc-600 border-zinc-900 hover:bg-zinc-900'
-                }`}
-              >
-                <div 
-                  className={`w-1.5 h-1.5 rounded-full transition-all duration-75 ${
-                    mod.isVisible 
-                      ? 'bg-emerald-500 shadow-[0_0_6px_#10b981]' 
-                      : 'bg-red-700/50'
-                  }`}
-                ></div>
-                <span>
-                  {mod.isVisible ? `[ON] ${mod.name}` : `[OFF] ${mod.name}`}
-                </span>
-              </button>
-            ))}
+          <StrumsVisualizer
+            state={strums.state}
+            onPrevPattern={strums.prevPattern}
+            onNextPattern={strums.nextPattern}
+            onTogglePlay={strums.toggle}
+          />
+        </PanelWrapper>
+        <PanelWrapper
+          className="bg-zinc-800"
+          title={(
+            <label className="text-2xs font-mono font-bold tracking-wider text-zinc-400 uppercase">
+              [LOOKUP] // SONG SEARCH
+            </label>
+          )}
+          contentClassName="p-4"
+        >
+          <SongLookup onLoad={handleSongLookupLoad} />
+        </PanelWrapper>
+        <SessionVaultPanel
+          sessions={storage.sessions}
+          isLoading={storage.isLoading}
+          error={storage.error}
+          onSaveCurrent={handleSaveCurrentSession}
+          onLoadSession={handleLoadStoredSession}
+          onDeleteSession={handleDeleteStoredSession}
+          onExportBackup={handleExportBackup}
+          onImportBackup={handleImportBackup}
+          onRefresh={storage.refreshSessions}
+        />
+        <div className="border border-zinc-800 bg-zinc-950 p-3 rounded-sm flex flex-col gap-2">
+          <span className="text-[10px] font-mono uppercase tracking-widest text-zinc-500">[ SESSION IO ]</span>
+          <div className="flex flex-wrap gap-2">
+            <TactileButton variant="zinc" onClick={handleExportSession}>
+              EXPORT JSON
+            </TactileButton>
+            <TactileButton variant="zinc" onClick={handleImportSessionClick}>
+              IMPORT JSON
+            </TactileButton>
           </div>
         </div>
-  
-        {/* Main Screen Layout */}
-        <main className="max-w-7xl w-full mx-auto p-4 md:p-6 lg:p-8 flex-grow flex flex-col space-y-8">
+      </>
+    );
+
+    return (
+      <div className={rootClasses}>
+        {!light && (
+          <div
+            className="fixed inset-0 pointer-events-none opacity-[0.035] mix-blend-overlay z-50"
+            style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E")` }}
+          ></div>
+        )}
+
+        {!isMobile && (
+          <Header
+            currentTheme={themeCtx.currentTheme}
+            themes={themeCtx.themes}
+            onSetTheme={themeCtx.setTheme}
+            onPreviewTheme={themeCtx.previewTheme}
+            onResetPreview={themeCtx.resetPreview}
+            isLoading={isLoading}
+            isPlaying={isPlaying}
+            onOpenDashboard={() => setDashboardOpen(true)}
+          />
+        )}
+
+        <ToastContainer toasts={toast.toasts} onDismiss={toast.removeToast} />
+
+        {dashboardOpen && (
+          <TokenDashboard onClose={() => setDashboardOpen(false)} />
+        )}
+
+        {isMobile ? (
+          <MobileWorkspace
+            mood={concept.mood}
+            bpm={bpm}
+            isPlaying={isPlaying}
+            isLive={liveSession.isLive}
+            theme={themeCtx.currentTheme === 'minimal-light' || themeCtx.currentTheme === 'arctic' ? 'minimal' : 'rack'}
+            onToggleTheme={() => {
+              const nextTheme = themeCtx.currentTheme === 'dark-industrial' ? 'minimal-light' : 'dark-industrial';
+              themeCtx.setTheme(nextTheme);
+            }}
+            onTogglePlay={handlePlayLoopToggle}
+            onToggleLive={liveSession.isLive ? liveSession.stopLive : liveSession.startLive}
+            onDecreaseBpm={() => setBpm((prev) => Math.max(40, prev - 5))}
+            onIncreaseBpm={() => setBpm((prev) => Math.min(240, prev + 5))}
+            toolsOpen={toolsOpen}
+            onToggleTools={() => setToolsOpen((prev) => !prev)}
+            onCloseTools={() => setToolsOpen(false)}
+            toolsContent={mobileTools}
+            lyricsContent={mobileLyrics}
+          />
+        ) : (
+          <>
+            {/* Workspace Desk Manager Panel */}
+            <div className="w-full border-b border-[var(--border-color)] bg-[var(--bg-primary)] px-4 md:px-6 py-3 flex flex-col sm:flex-row items-center justify-between select-none space-y-2.5 sm:space-y-0 shadow-inner z-10">
+              <div className="flex items-center space-x-2">
+                <span className="text-[10px] font-mono font-bold tracking-widest text-[var(--text-secondary)] uppercase">
+                  [ WORKSPACE DESK MANAGER ]
+                </span>
+              </div>
+              
+              <div className="flex flex-wrap items-center justify-center gap-2.5">
+                {/* Screen-reader instructions for keyboard DnD */}
+                <div id="workspace-dnd-instructions" className="sr-only">
+                  Usa Barra espaciadora para levantar, Flechas para mover, Esc para cancelar.
+                </div>
+                {!isTouchDevice ? (
+                  <DndContext
+                    sensors={useSensors(useSensor(PointerSensor), useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }))}
+                    onDragStart={(ev) => setDragActiveId(String(ev.active.id))}
+                    onDragOver={(ev) => setDragOverId(ev.over ? String(ev.over.id) : null)}
+                    onDragEnd={(event: DragEndEvent) => {
+                      const { active, over } = event;
+                      setDragActiveId(null);
+                      setDragOverId(null);
+                      if (!over) return;
+                      workspaceLayout.handleDragEnd(String(active.id), String(over.id));
+                    }}
+                    onDragCancel={() => { setDragActiveId(null); setDragOverId(null); }}
+                  >
+                    <SortableContext items={modules.map(m => m.id)} strategy={rectSortingStrategy}>
+                      {modules.map((mod) => (
+                        <div key={mod.id} className="relative">
+                          {/* Drop placeholder appears before the hovered target */}
+                          {dragOverId === mod.id && dragActiveId && dragActiveId !== mod.id && (
+                            <div className="absolute -top-3 left-0 right-0 flex justify-center pointer-events-none">
+                              <div className="bg-amber-500/10 backdrop-blur-sm rounded-full px-2 py-0.5 shadow-md transition-all duration-200 ease-out transform -translate-y-1 opacity-100">
+                                <svg width="18" height="10" viewBox="0 0 24 14" fill="none" xmlns="http://www.w3.org/2000/svg" className="text-amber-400">
+                                  <path d="M2 7h18" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                                  <path d="M12 1l6 6-6 6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                                </svg>
+                              </div>
+                            </div>
+                          )}
+
+                          <SortableToggle key={mod.id} id={mod.id}>
+                            <div className={`transition-all duration-200 ${dragOverId === mod.id ? 'ring-2 ring-amber-500/30 shadow-[0_8px_20px_rgba(245,158,11,0.12)] scale-102' : ''}`}>
+                              <button
+                                type="button"
+                                onClick={() => toggleModule(mod.id)}
+                                className={`flex items-center space-x-2 px-2.5 py-1 border rounded-sm font-mono text-[9px] uppercase tracking-wider font-semibold select-none transition-all duration-150 cursor-pointer ${
+                                  mod.isVisible
+                                    ? 'bg-zinc-900 text-stone-200 border-zinc-700 hover:bg-zinc-800 hover:border-zinc-600'
+                                    : 'bg-zinc-950 text-zinc-600 border-zinc-900 hover:bg-zinc-900'
+                                }`}
+                              >
+                                <div 
+                                  className={`w-1.5 h-1.5 rounded-full transition-all duration-75 ${
+                                    mod.isVisible 
+                                      ? 'bg-emerald-500 shadow-[0_0_6px_#10b981]' 
+                                      : 'bg-red-700/50'
+                                  }`}
+                                ></div>
+                                <span>
+                                  {mod.isVisible ? `[ON] ${mod.name}` : `[OFF] ${mod.name}`}
+                                </span>
+                              </button>
+                            </div>
+                          </SortableToggle>
+                        </div>
+                      ))}
+                    </SortableContext>
+                  </DndContext>
+                ) : (
+                  // Touch devices: render static controls without drag handles
+                  modules.map(mod => (
+                    <div key={mod.id} className="inline-block">
+                      <button
+                        type="button"
+                        onClick={() => toggleModule(mod.id)}
+                        className={`flex items-center space-x-2 px-2.5 py-1 border rounded-sm font-mono text-[9px] uppercase tracking-wider font-semibold select-none transition-all duration-100 cursor-pointer ${
+                          mod.isVisible
+                            ? 'bg-zinc-900 text-stone-200 border-zinc-700 hover:bg-zinc-800 hover:border-zinc-600'
+                            : 'bg-zinc-950 text-zinc-600 border-zinc-900 hover:bg-zinc-900'
+                        }`}
+                      >
+                        <div 
+                          className={`w-1.5 h-1.5 rounded-full transition-all duration-75 ${
+                            mod.isVisible 
+                              ? 'bg-emerald-500 shadow-[0_0_6px_#10b981]' 
+                              : 'bg-red-700/50'
+                          }`}
+                        ></div>
+                        <span>
+                          {mod.isVisible ? `[ON] ${mod.name}` : `[OFF] ${mod.name}`}
+                        </span>
+                      </button>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+    
+            {/* Main Screen Layout */}
+            <main className="max-w-7xl w-full mx-auto p-4 md:p-6 lg:p-8 grow flex flex-col space-y-8">
           
           {/* Top Control Panel: Mood, Smart Transposer & Practice Engine */}
-          <div className="flex flex-wrap gap-6 items-stretch">
+          <div className="flex flex-wrap gap-6 items-start">
             {isModuleVisible('control_panel') && (
-              <div className="flex-grow min-w-[300px] md:flex-[2_2_0%]">
+              <div className="grow min-w-75 md:flex-[2_2_0%]">
                 <MoodSelector 
                   value={concept.mood} 
-                  onChange={handleMoodChange} 
-                  onBypass={() => handleBypass('control_panel')} 
+                  onChange={handleMoodChange}
+                  customMood={customMood}
+                  onCustomMoodChange={setCustomMood}
+                  onBypass={() => handleBypass('control_panel')}
+                  collapsed={isPanelCollapsed('mood_selector')}
+                  onToggleCollapse={() => togglePanelCollapsed('mood_selector')}
                 />
+
+                <div className="mt-4">
+                  <LyricsControlPanel
+                    rhymeScheme={lyricsControls.rhymeScheme}
+                    emotionalMood={lyricsControls.emotionalMood}
+                    narrativePerson={lyricsControls.narrativePerson}
+                    metaphorDensity={lyricsControls.metaphorDensity}
+                    thematicConcept={lyricsControls.thematicConcept}
+                    genre={lyricsControls.genre}
+                    language={lyricsControls.language}
+                    linesToGenerate={lyricsControls.linesToGenerate}
+                    isGenerating={lyricsControls.isGenerating}
+                    error={lyricsControls.error}
+                    result={lyricsControls.result}
+                    onRhymeSchemeChange={lyricsControls.setRhymeScheme}
+                    onEmotionalMoodChange={lyricsControls.setEmotionalMood}
+                    onNarrativePersonChange={lyricsControls.setNarrativePerson}
+                    onMetaphorDensityChange={lyricsControls.setMetaphorDensity}
+                    onThematicConceptChange={lyricsControls.setThematicConcept}
+                    onGenreChange={lyricsControls.setGenre}
+                    onLanguageChange={lyricsControls.setLanguage}
+                    onLinesToGenerateChange={lyricsControls.setLinesToGenerate}
+                    onGenerate={async () => {
+                      try {
+                        const res = await lyricsControls.generateLyrics();
+                        console.log('[App] generateLyrics returned:', res);
+                        syncNotebookContent(res.chordProOutput);
+                        setConcept((prev) => ({
+                          ...prev,
+                          lyrics: res.chordProOutput,
+                          hasContinued: true,
+                        }));
+                      } catch (e) {
+                        console.error('Failed to generate lyrics:', e);
+                      }
+                    }}
+                    onBypass={() => handleBypass('control_panel')}
+                    collapsed={isPanelCollapsed('lyrics_controls')}
+                    onToggleCollapse={() => togglePanelCollapsed('lyrics_controls')}
+                  />
+                </div>
+                
+                <div className="mt-4">
+                  <PanelWrapper
+                    title={(
+                      <label className="text-2xs font-mono font-bold tracking-wider text-zinc-400 uppercase">[LOOKUP] // SONG SEARCH</label>
+                    )}
+                    collapsed={isPanelCollapsed('song_lookup')}
+                    onToggleCollapse={() => togglePanelCollapsed('song_lookup')}
+                    onBypass={() => handleBypass('song_lookup')}
+                    contentClassName="p-4"
+                  >
+                    <SongLookup onLoad={handleSongLookupLoad} />
+                  </PanelWrapper>
+                </div>
               </div>
             )}
-            
+
             {isModuleVisible('transposer') && (
-              <div className="flex-grow min-w-[200px] md:flex-1 border border-zinc-700 bg-zinc-800 p-4 rounded-sm flex flex-col space-y-3 shadow-md select-none justify-between">
-                <div className="flex items-center justify-between border-b border-zinc-700 pb-2">
+              <PanelWrapper
+                className="grow min-w-50 md:flex-1 bg-zinc-800"
+                collapsed={isPanelCollapsed('transposer')}
+                onToggleCollapse={() => togglePanelCollapsed('transposer')}
+                onBypass={() => handleBypass('transposer')}
+                title={(
                   <label className="text-2xs font-mono font-bold tracking-wider text-zinc-400 uppercase">
                     [PITCH] // SMART TRANSPOSER
                   </label>
-                  <button 
-                    type="button"
-                    onClick={() => handleBypass('transposer')}
-                    className="text-[9px] font-mono text-zinc-500 hover:text-red-500 border border-zinc-700 hover:border-red-900/50 px-1 py-0.5 rounded-sm bg-zinc-900 uppercase transition-colors cursor-pointer"
-                  >
-                    [ BYPASS ]
-                  </button>
-                </div>
-                <div className="flex-grow flex items-center justify-center space-x-3">
-                  <TactileButton variant="zinc" onClick={() => setTransposeSteps(s => s - 1)} className="!px-3 !py-2 !text-2xs">
+                )}
+                contentClassName="p-4 flex flex-col space-y-3"
+              >
+                <div className="grow flex items-center justify-center space-x-3">
+                  <TactileButton variant="zinc" onClick={() => setTransposeSteps(s => s - 1)} className="px-3! py-2! text-2xs!">
                     -1 ST
                   </TactileButton>
                   <div className="bg-zinc-950 px-3 py-2 border border-zinc-800 rounded-sm font-mono text-xs text-amber-500 font-bold uppercase w-24 text-center shadow-inner">
                     CAPO: {transposeSteps > 0 ? `+${transposeSteps}` : transposeSteps}
                   </div>
-                  <TactileButton variant="zinc" onClick={() => setTransposeSteps(s => s + 1)} className="!px-3 !py-2 !text-2xs">
+                  <TactileButton variant="zinc" onClick={() => setTransposeSteps(s => s + 1)} className="px-3! py-2! text-2xs!">
                     +1 ST
                   </TactileButton>
                 </div>
-              </div>
+                <StrumsVisualizer
+                  state={strums.state}
+                  onPrevPattern={strums.prevPattern}
+                  onNextPattern={strums.nextPattern}
+                  onTogglePlay={strums.toggle}
+                  onBypass={() => handleBypass('transposer')}
+                />
+              </PanelWrapper>
             )}
+
+            <div className="grow min-w-50 md:flex-1">
+              <SessionVaultPanel
+                sessions={storage.sessions}
+                isLoading={storage.isLoading}
+                error={storage.error}
+                onSaveCurrent={handleSaveCurrentSession}
+                onLoadSession={handleLoadStoredSession}
+                onDeleteSession={handleDeleteStoredSession}
+                onExportBackup={handleExportBackup}
+                onImportBackup={handleImportBackup}
+                onRefresh={storage.refreshSessions}
+              />
+            </div>
   
             {/* Practice Engine Module - Always Visible */}
-            <div className="flex-grow min-w-[200px] md:flex-1 border border-zinc-700 bg-zinc-800 p-4 rounded-sm flex flex-col space-y-3 shadow-md select-none justify-between">
+              <div className="grow min-w-50 md:flex-1 border border-zinc-700 bg-zinc-800 p-4 rounded-sm flex flex-col space-y-3 shadow-md select-none justify-between">
               <div className="flex items-center justify-between border-b border-zinc-700 pb-2">
                 <label className="text-2xs font-mono font-bold tracking-wider text-zinc-400 uppercase">
                   [SESSION] // PRACTICE ENGINE
@@ -289,32 +898,37 @@ function App() {
                   ></div>
                 </div>
               </div>
-              <div className="flex flex-col space-y-2 flex-grow justify-center">
+              <div className="flex flex-col space-y-3 grow justify-center">
                 <TactileButton 
                   variant={isPracticeMode ? 'orange' : 'zinc'} 
                   onClick={handlePracticeModeToggle}
                   className={`py-1.5 text-xs font-bold font-mono tracking-widest ${
-                    isPracticeMode ? '!bg-orange-500 !text-zinc-950 hover:!bg-orange-400' : ''
+                    isPracticeMode ? 'bg-orange-500! text-zinc-950! hover:bg-orange-400!' : ''
                   }`}
                 >
                   {isPracticeMode ? '[ ACTIVE ]' : '[ PRACTICE MODE ]'}
                 </TactileButton>
+                <LiveSessionOverlay
+                  state={liveSession.state}
+                  onToggle={liveSession.isLive ? liveSession.stopLive : liveSession.startLive}
+                  onSetChordDuration={liveSession.setChordDuration}
+                />
                 <div className="flex items-center justify-center space-x-2">
                   <TactileButton 
                     variant="zinc" 
                     onClick={() => setBpm(b => Math.max(40, b - 5))} 
-                    className="!px-2 !py-1 !text-2xs font-mono"
+                    className="px-2! py-1! text-2xs! font-mono"
                   >
                     -5
                   </TactileButton>
-                  <div className="flex-grow bg-zinc-950 px-2 py-1 border border-zinc-800 rounded-sm font-mono text-xs text-amber-500 font-bold uppercase text-center shadow-inner flex items-center justify-center space-x-1">
+                  <div className="grow bg-zinc-950 px-2 py-1 border border-zinc-800 rounded-sm font-mono text-xs text-amber-500 font-bold uppercase text-center shadow-inner flex items-center justify-center space-x-1">
                     <span>{bpm}</span>
                     <span className="text-[9px] text-zinc-600">BPM</span>
                   </div>
                   <TactileButton 
                     variant="zinc" 
                     onClick={() => setBpm(b => Math.min(240, b + 5))} 
-                    className="!px-2 !py-1 !text-2xs font-mono"
+                    className="px-2! py-1! text-2xs! font-mono"
                   >
                     +5
                   </TactileButton>
@@ -339,7 +953,15 @@ function App() {
                     <ChordGrid 
                       chords={concept.chords} 
                       transposeSteps={transposeSteps} 
+                      variationIndices={chordVariations}
+                      onVariationChange={(chordIdx, newVarIdx) => {
+                        const nextVars = [...chordVariations];
+                        nextVars[chordIdx] = newVarIdx;
+                        setChordVariations(nextVars);
+                      }}
                       onBypass={() => handleBypass('chord_monitor')}
+                      collapsed={isPanelCollapsed('chord_monitor')}
+                      onToggleCollapse={() => togglePanelCollapsed('chord_monitor')}
                     />
                   )}
                   
@@ -348,19 +970,21 @@ function App() {
                     <ScalePanel 
                       scale={concept.scale} 
                       onBypass={() => handleBypass('scale_visualizer')}
+                      collapsed={isPanelCollapsed('scale_visualizer')}
+                      onToggleCollapse={() => togglePanelCollapsed('scale_visualizer')}
                     />
                   )}
       
                   {/* Extra Hardware/Rack details for visual premium texture */}
-                  <div className="border border-zinc-800 bg-zinc-950 p-4 rounded-sm flex justify-between items-center text-3xs font-mono text-zinc-600">
+                  <div className="border border-[var(--border-color)] bg-[var(--bg-primary)] p-4 rounded-sm flex justify-between items-center text-3xs font-mono text-[var(--text-muted)]">
                     <div className="flex space-x-3">
                       <span>RACK: 01A</span>
                       <span>PATCH: COLD-STATE</span>
-                      <span className={isLoading ? "text-amber-500 animate-pulse" : ""}>
-                        STATUS: {isLoading ? "RECEIVING SIGNAL..." : "READY"}
+                      <span className={isLoading ? 'text-[var(--accent-primary)] animate-pulse' : isPlaying ? 'text-[var(--accent-secondary)]' : ''}>
+                        STATUS: {isLoading ? 'GENERATING' : isPlaying ? 'ACTIVE' : 'READY'}
                       </span>
                     </div>
-                    <div className={`w-1.5 h-1.5 ${isLoading ? 'bg-amber-500 animate-ping' : 'bg-emerald-500'}`}></div>
+                    <div className={`w-1.5 h-1.5 ${isLoading ? 'bg-[var(--accent-primary)] animate-ping' : isPlaying ? 'bg-[var(--accent-secondary)] animate-pulse' : 'bg-[var(--status-active)]'}`}></div>
                   </div>
                 </div>
               )}
@@ -369,47 +993,66 @@ function App() {
               {isRightVisible && (
                 <div className="flex flex-col space-y-4 h-full justify-between">
                   {/* Sheet showing monospace typography */}
-                  <div className="flex-grow">
+                  <div className="grow">
                     <LyricsSheet 
-                      lyrics={concept.lyrics} 
+                      lyrics={chordProContent} 
                       transposeSteps={transposeSteps} 
                       isPracticeMode={isPracticeMode}
+                      isLive={liveSession.isLive}
+                      activeChord={liveSession.state.activeChord}
+                      onLyricsChange={syncNotebookContent}
+                      onAssistWithAI={handleAssistWithAI}
+                      onMapChords={handleMapChords}
+                      availableChords={concept.chords}
                       onBypass={() => handleBypass('lyrics_sheet')}
+                      collapsed={isPanelCollapsed('lyrics_sheet')}
+                      onToggleCollapse={() => togglePanelCollapsed('lyrics_sheet')}
                     />
                   </div>
       
                   {/* Actions Controller deck */}
-                  <div className="border border-zinc-700 bg-zinc-800 p-4 rounded-sm shadow-md flex items-center justify-between">
-                    <div className="flex flex-col space-y-0.5">
-                      <span className="text-[10px] font-mono text-zinc-400 uppercase tracking-wider">
-                        [SEQUENCER CONTROL]
-                      </span>
-                      <span className="text-3xs font-mono text-zinc-500">
-                        {isPlaying ? 'BACKING LOOP RUNNING' : 'LOOP PLAYER & WRITER DECK'}
-                      </span>
-                    </div>
+                  <div className="border border-[var(--border-color)] bg-[var(--bg-tertiary)] p-4 rounded-sm shadow-md flex flex-col space-y-3">
+                    <span className="text-xs font-mono text-[var(--text-muted)] uppercase tracking-wider">
+                      [SEQUENCER CONTROL] {isPlaying ? 'BACKING LOOP RUNNING' : 'LOOP PLAYER & WRITER DECK'}
+                    </span>
       
-                    <div className="flex items-center space-x-3">
-                      {/* Play/Stop Loop Button */}
+                    <div className="flex items-center gap-3">
                       <TactileButton
                         variant={isPlaying ? 'red' : 'green'}
                         onClick={handlePlayLoopToggle}
                         disabled={isPlaybackDisabled}
-                        className="font-bold min-w-[110px]"
+                        className="font-bold flex-1"
                       >
                         {isPlaying ? 'STOP LOOP' : 'PLAY LOOP'}
                       </TactileButton>
-      
-                      {/* Physical Clicky Tactile Button */}
+
                       <TactileButton
                         variant={concept.hasContinued ? 'zinc' : 'orange'}
                         onClick={handleContinueLyrics}
                         disabled={concept.hasContinued}
+                        className="flex-1"
                       >
                         {concept.hasContinued ? 'LETRA COMPLETADA' : 'CONTINUAR LETRA'}
                       </TactileButton>
+
+                      <TactileButton
+                        variant="zinc"
+                        onClick={handleExportSession}
+                        className="font-bold flex-1"
+                      >
+                        EXPORT JSON
+                      </TactileButton>
+
+                      <TactileButton
+                        variant="zinc"
+                        onClick={handleImportSessionClick}
+                        className="font-bold flex-1"
+                      >
+                        IMPORT JSON
+                      </TactileButton>
                     </div>
                   </div>
+
                 </div>
               )}
             </div>
@@ -422,6 +1065,16 @@ function App() {
             </div>
           )}
         </main>
+          </>
+        )}
+
+        <input
+          ref={sessionFileInputRef}
+          type="file"
+          accept=".acordify.json,application/json"
+          className="hidden"
+          onChange={handleImportSessionFile}
+        />
       </div>
     );
 }

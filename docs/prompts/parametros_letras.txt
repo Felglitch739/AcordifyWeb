@@ -1,0 +1,180 @@
+ROLE:
+You are a senior full-stack engineer and UX designer specialized 
+in AI-powered creative tools. You have deep knowledge of React, 
+TypeScript, Tailwind CSS, and prompt engineering for lyric generation.
+
+PROJECT CONTEXT:
+Acordify is a React + TypeScript + Vite web app for musicians.
+It already has a ChordPro Notebook that renders lyrics + chords,
+and a lyrics generation module that calls Gemini / Azure OpenAI.
+The visual language is industrial rack/hardware: dark backgrounds,
+monospace typography, orange/green accents, bracket notation for
+labels like [MODULE] // DESCRIPTION and [ BUTTON ].
+Zero inline styles. Tailwind only. Zero `any` in TypeScript.
+Functional components only. Logic in hooks, UI in components.
+
+TASK:
+Implement the advanced lyrics parameters panel for Acordify.
+This adds fine-grained creative controls to the existing lyrics
+generation flow, synced with the active chord progression and BPM.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+FILES TO CREATE:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+[1] /src/components/LyricsControlPanel.tsx
+    The UI panel with all controls. Receives state via props,
+    emits changes via callbacks. Zero business logic inside.
+
+[2] /src/services/lyricsService.ts
+    Builds the system + user prompt for lyrics generation.
+    Calls Gemini / Azure OpenAI. Parses and validates response.
+    Exports typed functions and interfaces only.
+
+[3] /src/hooks/useLyricsControls.ts
+    Manages the state of all lyric parameters.
+    Single source of truth for the control panel.
+    Exposes state + handlers to the parent component.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+TYPESCRIPT INTERFACES (define in lyricsService.ts, export all):
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+interface LyricsParams {
+  // Musical context (injected from app state, not user-controlled)
+  activeChords: string[]       // e.g. ["Cmaj7","Am9","Dm7","G13"]
+  keyRoot: string              // e.g. "A"
+  mode: 'major' | 'minor'
+  bpm: number                  // e.g. 90
+  mood: string                 // e.g. "Jazz Melancólico"
+
+  // User-controlled parameters
+  rhymeScheme: 'ABAB' | 'AABB' | 'ABBA' | 'free'
+  emotionalMood: number        // 0-100, 0=melancólico, 100=esperanzador
+  narrativePerson: '1ra' | '2da' | '3ra'
+  metaphorDensity: 'literal' | 'balanced' | 'poetic'
+  thematicConcept: string      // free text, optional, max 60 chars
+  language: 'es' | 'en'
+  linesToGenerate: 4 | 8
+}
+
+interface LyricsResult {
+  lines: Array<{
+    text: string
+    chord: string              // chord active on this line
+    syllableCount: number
+    rhymeLabel: string         // "A" | "B" | "C"
+  }>
+  detectedScheme: string
+  emotionalTag: string         // e.g. "resignación melancólica"
+  chordProOutput: string       // ready to inject into ChordPro Notebook
+}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+UI CONTROLS TO IMPLEMENT (LyricsControlPanel.tsx):
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+All controls must follow the Acordify rack/hardware aesthetic:
+monospace font, dark bg, orange accent (#f97316), green for
+active states, bracket notation for labels.
+
+1. RHYME SCHEME SELECTOR
+   Segmented control with 4 options: ABAB | AABB | ABBA | FREE
+   Style: pill buttons, active = orange border + text
+   Label: [RIMA] // ESQUEMA
+
+2. EMOTIONAL MOOD SLIDER
+   Range: 0-100
+   Left label: MELANCÓLICO
+   Right label: ESPERANZADOR  
+   Track: dark, thumb = orange circle
+   Show numeric value as hidden, show only the label closer to
+   current value with a dot indicator
+   Label: [MOOD] // TONO EMOCIONAL
+
+3. NARRATIVE PERSON SELECTOR
+   3 options: 1RA | 2DA | 3RA
+   Same style as rhyme scheme selector
+   Label: [VOZ] // PERSPECTIVA NARRATIVA
+
+4. METAPHOR DENSITY TOGGLE
+   3 states: LITERAL | BALANCEADO | POÉTICO
+   Visual: 3 horizontal bars that fill progressively (like EQ bars)
+   Active state glows orange
+   Label: [META] // DENSIDAD METAFÓRICA
+
+5. THEMATIC CONCEPT INPUT
+   Single line text input, max 60 chars
+   Placeholder: "ej: soledad urbana, nostalgia de verano..."
+   Character counter bottom-right: "0/60"
+   Label: [CONCEPTO] // TEMA LIBRE (OPCIONAL)
+
+6. LANGUAGE + LINES SELECTOR
+   Two inline controls:
+   - Language: ES | EN toggle
+   - Lines: 4 LÍNEAS | 8 LÍNEAS toggle
+   Label: [CONFIG] // IDIOMA & EXTENSIÓN
+
+7. GENERATE BUTTON
+   Full width, prominent
+   Text: [ GENERAR LETRA ]
+   Active: orange bg, black text
+   Loading state: [ GENERANDO... ] with blinking cursor animation
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SYSTEM PROMPT TO BUILD (inside lyricsService.ts):
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+The buildLyricsPrompt(params: LyricsParams) function must
+construct a system + user prompt that:
+
+- Maps emotionalMood (0-100) to descriptive language:
+  0-20   → "profundamente melancólico, casi nihilista"
+  21-40  → "melancólico con destellos de aceptación"
+  41-60  → "ambivalente, entre la sombra y la luz"
+  61-80  → "esperanzador pero realista"
+  81-100 → "luminoso, resolutivo, esperanza plena"
+
+- Maps metaphorDensity:
+  literal   → "lenguaje directo, imágenes concretas, sin metáforas"
+  balanced  → "metáforas moderadas, imágenes vívidas pero accesibles"
+  poetic    → "lenguaje altamente metafórico, simbolismo denso"
+
+- Maps BPM to rhythmic feel hint:
+  < 70 BPM  → "tempo lento, sílabas largas, pocas palabras por línea"
+  70-100    → "tempo moderado, balance entre fluidez y peso"
+  > 100 BPM → "tempo rápido, líneas densas, ritmo interno marcado"
+
+- Enforces syllabic consistency based on BPM mapping above
+- Maps each line to a chord from activeChords cyclically
+- Output: JSON only, matching LyricsResult schema exactly
+- Language of lyrics: {{LANGUAGE}}
+- Prohibits: clichés de amor romántico genérico, relleno silábico,
+  cambio de persona narrativa mid-stanza
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+CONSTRAINTS:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+- Zero `any`. Strict TypeScript throughout.
+- Zero inline styles. Tailwind classes only.
+- LyricsControlPanel must be fully controlled (no internal state).
+  All state lives in useLyricsControls hook.
+- lyricsService functions must be pure (no side effects,
+  no direct API calls from the service — return the prompt
+  strings only; the hook handles the fetch).
+- The hook (useLyricsControls) handles: state, API call,
+  loading state, error state, and result.
+- Reuse existing Tone.js BPM value from app state.
+  Do NOT create a new BPM source.
+- After generating, call toChordProFormat(result) and
+  inject output into the existing ChordPro Notebook.
+  Do NOT create a new lyrics display component.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+OUTPUT:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Deliver the 3 files completely implemented, zero placeholders.
+After the code, include a short integration note explaining:
+- Which existing component needs to render LyricsControlPanel
+- Which existing hook/context provides activeChords and bpm
+- How the chordProOutput plugs into the ChordPro Notebook

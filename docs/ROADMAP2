@@ -1,0 +1,360 @@
+# ACORDIFY — ROADMAP MAESTRO
+> Actualizado: Mayo 2026 | Stack: React + TypeScript + Vite + Tailwind + Tone.js
+
+---
+
+## ESTADO DEL PROYECTO
+
+```
+Migración Android → Web         ✅ Completo
+Motor de Audio (Tone.js)        ✅ Completo
+Transpositor de acordes         ✅ Completo
+Metrónomo visual                ✅ Completo
+Auto-scroll manos libres        ✅ Completo
+Pipeline CI/CD (GitHub Actions) ✅ Completo
+harmonicValidator.ts            ✅ Completo → /src/utils/harmonicValidator.ts
+buildChordPrompt.ts             ✅ Completo → /src/services/chordPromptBuilder.ts
+Parámetros Avanzados Letras     ✅ Completo → /src/components/LyricsControlPanel.tsx
+Rasgueos Animados               ✅ Completo → /src/components/StrumsVisualizer.tsx
+Modo Sesión en Vivo             ✅ Completo → /src/hooks/useLiveSession.ts
+Export/Import JSON              ✅ Completo → /src/utils/sessionExporter.ts
+Layout fixes (items-start)      ✅ Completo → /src/App.tsx (layout tweaks)
+PanelWrapper + Collapse         ✅ Completo → /src/components/PanelWrapper.tsx
+Drag & Drop (dnd-kit)           ✅ Completo → src/hooks/useWorkspaceLayout.ts + App.tsx
+IndexedDB Persistence (idb)     ✅ Completo → /src/services/storageService.ts
+```
+
+---
+
+## PIPELINE DE IMPLEMENTACIÓN
+
+Cada tarea tiene su prompt experto en `/docs/prompts/`.
+Implementar **en orden**. No avanzar al siguiente paso sin aprobar el anterior.
+
+---
+
+### 01 — harmonicValidator.ts ✅
+**Archivo:** `/docs/prompts/01_harmonic_validator.txt`
+**Destino:** `/src/utils/harmonicValidator.ts`
+**Descripción:** Validación armónica post-generación. Detecta acordes
+disonantes, borrowed chords, dominantes secundarios y calcula un
+coherenceScore (0-100) para cada progresión antes de mostrarla al usuario.
+
+---
+
+### 02 — buildChordPrompt.ts ✅
+**Archivo:** `/docs/prompts/02_chord_prompt_builder.txt`
+**Destino:** `/src/services/chordPromptBuilder.ts`
+**Descripción:** Sistema de prompt engineering para la generación de
+acordes. Elimina progresiones cliché, fuerza variedad armónica por mood
+y conecta con harmonicValidator como capa de validación.
+
+---
+
+### 03 — Modo "Completar Verso" ✅
+**Archivo:** `/docs/prompts/03_completar_verso.txt`
+**Destino:** `/src/services/completeVerseService.ts`
+**Descripción:** El usuario escribe 1-4 líneas y la IA completa la
+estrofa preservando voz, esquema de rima, métrica silábica y mapeando
+cada línea a un acorde de la progresión activa.
+
+---
+
+### 04 — Parámetros Avanzados de Letras ✅
+**Archivo:** `/docs/prompts/04_parametros_letras.txt`
+**Destino:** `/src/components/LyricsControlPanel.tsx` + `/src/services/lyricsService.ts`
+**Descripción:** Panel de controles avanzados: esquema de rima, tono
+emocional, perspectiva narrativa, densidad metafórica, tema libre.
+
+---
+
+### 05 — Rasgueos Animados por Género ✅
+**Archivo:** `/docs/prompts/05_rasgueos_animados.txt`
+**Destino:** `/src/components/StrumsVisualizer.tsx`
+**Descripción:** Flechas animadas (↓ ↑) sincronizadas con Tone.js
+Transport. Patrones predefinidos por mood/género.
+
+---
+
+### 06 — Modo Sesión en Vivo ✅
+**Archivo:** `/docs/prompts/06_sesion_en_vivo.txt`
+**Destino:** `/src/hooks/useLiveSession.ts` + `/src/components/LiveSessionOverlay.tsx`
+**Descripción:** Acordes del ChordPro Notebook resaltados en tiempo real
+al ritmo del BPM. 1M = 1 compás = 4 beats. 2M = 2 compases = 8 beats.
+
+---
+
+### 07 — Export/Import de Sesión JSON ✅
+**Archivo:** `/docs/prompts/07_export_sesion.txt`
+**Destino:** `/src/utils/sessionExporter.ts` + `/src/hooks/useSessionIO.ts`
+**Descripción:** Exporta/importa workspace completo como `.acordify.json`.
+Incluye progresión, transposición, BPM, mood, letras y metadatos.
+
+---
+
+### 08 — Layout Fix + items-start ✅
+**Archivo:** `/docs/prompts/08_layout_fix.txt`
+**Destino:** Layout principal en `App.tsx` o archivo de layout raíz
+**Descripción:** Corrección del grid principal para que los paneles
+tomen solo la altura que necesitan, sin estirarse.
+
+**Instrucciones concretas:**
+1. En el grid wrapper principal cambiar `items-stretch` por `items-start`
+   o añadir `items-start` a las clases del grid de 4 columnas
+2. Mover `StrumsVisualizer` al panel `[PITCH] // SMART TRANSPOSER`
+   ya que comparten columna de performance y el panel está vacío arriba
+3. En `[VAULT] // SESSION STORAGE` añadir `max-h-48 overflow-y-auto`
+   al contenedor de sesiones guardadas para evitar que se estire
+4. Verificar que todos los paneles usen `h-fit` o `self-start`
+   en lugar de altura fija o stretch implícito
+
+---
+
+### 09 — Collapse Estandarizado + Persistencia ✅
+**Archivo:** `/docs/prompts/09_collapse_panels.txt`
+**Destino:** `/src/components/PanelWrapper.tsx` (nuevo componente base)
+**Descripción:** Todos los paneles con `[ BYPASS ]` deben poder
+colapsarse/expandirse de forma estándar. Estado persiste en localStorage.
+
+**Instrucciones concretas:**
+1. Crear componente `PanelWrapper` que envuelva cualquier panel:
+   - Props: `id: string`, `title: string`, `defaultExpanded?: boolean`
+   - Cuando collapsed: solo muestra header con `[MÓDULO] // NOMBRE  [ BYPASS ]`
+   - Cuando expanded: muestra header + children
+   - Animación: `max-height` transition 200ms ease
+2. Persistir estado en localStorage con key `acordify_panels`:
+   ```
+   { "control-panel": true, "lyrics": false, "pitch": true, ... }
+   ```
+3. Reemplazar los headers `[ BYPASS ]` existentes usando PanelWrapper
+4. El botón `[ BYPASS ]` debe rotar 180° cuando está colapsado
+   (indicador visual de estado)
+5. IDs de paneles a usar:
+   - `control-panel`, `lyrics`, `pitch`, `vault`,
+     `session`, `monitor`, `sheet`, `receiver`
+
+---
+
+### 10 — Drag & Drop de Paneles (dnd-kit) ✅
+**Archivo:** `/docs/prompts/10_drag_drop.txt`
+**Destino:** `/src/hooks/useWorkspaceLayout.ts` + modificaciones en layout
+**Descripción:** El usuario puede reordenar los paneles arrastrándolos.
+Librería: `dnd-kit` (la más estable para React en 2026).
+
+**Instrucciones concretas:**
+1. Instalar: `npm install @dnd-kit/core @dnd-kit/sortable @dnd-kit/utilities`
+2. Crear hook `useWorkspaceLayout` que maneje:
+   - `panelOrder: string[]` — array de IDs en el orden actual
+   - `handleDragEnd(event)` — actualiza orden al soltar
+   - Persiste `panelOrder` en localStorage key `acordify_layout`
+3. Cada `PanelWrapper` (del paso 09) recibe un drag handle:
+   - Pequeño ícono `⠿` en el header, solo visible en hover
+   - Color: zinc-500, no interfiere con el BYPASS button
+4. El grid principal se convierte en lista sortable de dnd-kit:
+   ```tsx
+   <SortableContext items={panelOrder} strategy={rectSortingStrategy}>
+     {panelOrder.map(id => <SortablePanel key={id} id={id} />)}
+   </SortableContext>
+   ```
+5. Durante el drag: panel activo tiene `opacity-50 scale-95`
+6. Drop indicator: línea naranja de 2px donde va a caer el panel
+7. En móvil: drag desactivado (touch events conflictan con scroll)
+
+---
+
+### 11 — Song Lookup — Buscar Canción por Nombre 🔨
+**Archivo:** `/docs/prompts/11_song_lookup.txt`
+**Destino:** `/src/services/songLookupService.ts` + `/src/components/SongLookup.tsx`
+**Descripción:** El usuario escribe el nombre de una canción y artista,
+la IA busca los acordes reales y los carga directo al ChordPro Notebook.
+
+**Instrucciones concretas:**
+1. UI: input de texto + botón `[ BUSCAR ]` en un nuevo panel
+   `[LOOKUP] // SONG SEARCH`
+2. Flujo:
+   a. Usuario escribe: "Wonderwall Oasis"
+   b. Se llama a Gemini/Azure con web search habilitado
+   c. El prompt pide: acordes reales, tonalidad, BPM aproximado,
+      y formato ChordPro de la letra con acordes mapeados
+   d. Se valida con `harmonicValidator.ts` antes de mostrar
+   e. Se carga al ChordPro Notebook + se actualiza progresión activa
+3. Estados de UI:
+   - Idle: input vacío, botón activo
+   - Loading: `[ BUSCANDO... ]` con animación de puntos
+   - Success: toast verde "✓ Canción cargada: {título}"
+   - Error: toast rojo con mensaje descriptivo
+4. El prompt al modelo debe:
+   - Pedir explícitamente formato ChordPro estándar
+   - Incluir tonalidad detectada y BPM sugerido en el JSON
+   - Advertir al modelo que NO invente acordes si no conoce la canción:
+     debe responder con `"found": false` si no tiene datos confiables
+5. Schema de respuesta:
+   ```json
+   {
+     "found": true,
+     "title": "Wonderwall",
+     "artist": "Oasis",
+     "keyRoot": "F#",
+     "mode": "minor",
+     "bpmSuggested": 87,
+     "chords": ["Em7","G","Dsus4","A7sus4"],
+     "chordProContent": "...",
+     "confidence": 0.92
+   }
+   ```
+6. Si `confidence < 0.7`: mostrar warning amarillo
+   "⚠ Acordes aproximados — verifica antes de tocar"
+
+---
+
+### 12 — Editor Libre de Canción 🔨
+**Archivo:** `/docs/prompts/12_editor_libre.txt`
+**Destino:** Modificaciones en ChordPro Notebook + nuevo modo de edición
+**Descripción:** El usuario puede escribir su canción directamente en
+el ChordPro Notebook. La IA asiste solo cuando el usuario lo pide,
+sin tomar el control automáticamente.
+
+**Instrucciones concretas:**
+1. Añadir toggle `[ MODO LECTURA ] / [ MODO EDICIÓN ]` en el header
+   del ChordPro Notebook
+2. En modo edición:
+   - El contenido del Notebook se vuelve un textarea editable
+   - Syntax highlighting en tiempo real: texto normal en blanco,
+     acordes entre corchetes `[Cmaj7]` en naranja
+   - Autocompletado de acordes: al escribir `[C` mostrar dropdown
+     con sugerencias: `Cmaj7`, `Cm`, `C7`, `Csus2`...
+3. Botón `[ ASISTIR CON IA ]` aparece solo en modo edición:
+   - Toma el texto actual como contexto
+   - Llama al servicio de `completeVerseService` con lo escrito
+   - Inserta la sugerencia al final, no reemplaza lo existente
+4. Botón `[ MAPEAR ACORDES ]`:
+   - Analiza el texto escrito sin acordes
+   - Sugiere dónde poner los acordes de la progresión activa
+   - Los inserta como `[Chord]` al inicio de cada línea
+5. Guardar automáticamente al localStorage cada 30 segundos
+   en modo edición (autosave, no requiere acción del usuario)
+6. En modo lectura: comportamiento actual, sin cambios
+
+---
+
+### 13 — Vista Móvil Dedicada 🔨#Este no hacerlo, esto será alfinal de todo absolutamente todo
+**Archivo:** `/docs/prompts/13_mobile_view.txt`
+**Destino:** `/src/components/mobile/` (carpeta nueva)
+**Descripción:** En móvil se muestra una interfaz completamente distinta,
+optimizada para tocar guitarra con el teléfono en un atril.
+No es la vista de escritorio "achicada" — es un diseño propio.
+
+**Instrucciones concretas:**
+1. Detectar móvil con hook `useIsMobile`:
+   ```ts
+   const useIsMobile = () => useMediaQuery('(max-width: 768px)')
+   ```
+2. En móvil renderizar `<MobileWorkspace />` en lugar del grid desktop
+3. Layout móvil — 3 secciones apiladas:
+   ```
+   ┌─────────────────────┐
+   │  HEADER: título +   │  altura fija 56px
+   │  mood activo        │
+   ├─────────────────────┤
+   │                     │
+   │  CHORDPRO NOTEBOOK  │  flex-1, ocupa todo el espacio
+   │  (letra + acordes)  │  font-size más grande para leer
+   │  fuente 18px mín.   │
+   │                     │
+   ├─────────────────────┤
+   │  BOTTOM BAR:        │  altura fija 72px
+   │  [▶ PLAY] [LIVE]    │
+   │  [♩ BPM] [⚙ TOOLS] │
+   └─────────────────────┘
+   ```
+4. Botón `[ ⚙ TOOLS ]` abre un bottom drawer con acceso a:
+   - Generador de acordes
+   - Parámetros de letra
+   - Transpositor
+   - Song Lookup
+   - Export/Import
+5. El ChordPro Notebook en móvil:
+   - Font mínimo 18px para legibilidad
+   - Auto-scroll funcional con touch
+   - Acordes en naranja, texto en blanco, sin cambios
+   - Live Session highlight funciona igual
+6. Mantener toda la lógica existente — solo cambia la presentación
+   No duplicar hooks ni servicios, solo la capa de UI
+
+---
+
+### 14 — Persistencia Local (IndexedDB) ✅
+**Archivo:** `/docs/prompts/14_indexeddb.txt`
+**Destino:** `/src/services/storageService.ts` + `/src/hooks/useStorage.ts`
+**Descripción:** Almacenamiento local de sesiones en el browser del
+usuario. Sin servidor, sin costo. Se implementa al final porque usa
+el schema de sesión ya estable del paso 07.
+
+**Instrucciones concretas:**
+1. Usar la librería `idb` (wrapper de IndexedDB):
+   `npm install idb`
+2. Base de datos: `acordify-db`, versión 1
+   Store: `sessions` con keyPath `id` (auto-increment)
+   Índices: `createdAt`, `mood`, `title`
+3. Funciones en `storageService.ts` (todas async, todas tipadas):
+   - `saveSession(session: AcordifySession): Promise<number>` → devuelve ID
+   - `getAllSessions(): Promise<AcordifySession[]>` → ordenadas por fecha desc
+   - `getSessionById(id: number): Promise<AcordifySession | undefined>`
+   - `deleteSession(id: number): Promise<void>`
+   - `updateSession(id: number, session: AcordifySession): Promise<void>`
+4. Hook `useStorage` expone:
+   - `sessions: AcordifySession[]`
+   - `saveCurrentSession(titleOverride?: string): Promise<void>`
+   - `loadSession(id: number): void` → carga al estado de la app
+   - `deleteSession(id: number): Promise<void>`
+   - `isLoading: boolean`
+   - `error: string | null`
+5. En el `[VAULT] // SESSION STORAGE` panel mostrar lista de sesiones:
+   - Cada sesión: título + mood + fecha + BPM
+   - Botones: `[ CARGAR ]` `[ ELIMINAR ]`
+   - Límite visual: mostrar máx 10, con scroll
+6. El botón `SAVE SESSION` del Vault llama a `saveCurrentSession()`
+7. EXPORT BACKUP del Vault exporta TODAS las sesiones como un solo
+   `.acordify-backup.json` con array de sesiones
+
+---
+
+## NOTAS DE ARQUITECTURA
+
+```
+/src
+  /components
+    /mobile     → componentes exclusivos de vista móvil
+  /hooks        → lógica stateful
+  /utils        → funciones puras
+  /services     → llamadas a APIs
+
+/docs
+  /prompts      → un .txt por tarea
+  ROADMAP.md    → este archivo
+```
+
+**Reglas que no se negocian:**
+- Cero `any` en TypeScript
+- Tone.js Transport = único source of truth para timing
+- No manipular Web Audio API directamente
+- Tailwind only, sin inline styles salvo excepciones documentadas
+- Funciones puras en /utils, sin efectos secundarios
+- No duplicar hooks o servicios entre desktop y móvil
+
+---
+
+## CONVENCIONES DE NOMBRES
+
+| Elemento | Convención | Ejemplo |
+|---|---|---|
+| Componentes | PascalCase | `StrumsVisualizer.tsx` |
+| Hooks | camelCase con `use` | `useLiveSession.ts` |
+| Servicios | camelCase + Service | `lyricsService.ts` |
+| Utils | camelCase + descriptor | `harmonicValidator.ts` |
+| Acordes | Notación estándar | `Cmaj7`, `Am9`, `G13` |
+| Prompts | numerados + nombre | `08_layout_fix.txt` |
+
+---
+
+*ACORDIFY CORP. © 2026 — Documento interno de desarrollo*

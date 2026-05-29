@@ -1,3 +1,5 @@
+import { recordTokenUsage } from './tokenTracker';
+
 export interface SongConceptResponse {
   chords: string[];
   scale: string;
@@ -8,7 +10,7 @@ export interface SongConceptResponse {
  * Calls Azure OpenAI to generate a dynamic song concept based on a mood.
  * Expects VITE_AZURE_API_KEY and VITE_AZURE_ENDPOINT in .env.local
  */
-export async function generateSongConcept(mood: string): Promise<SongConceptResponse> {
+export async function generateSongConcept(mood: string, genre?: string, prevChords?: string[]): Promise<SongConceptResponse> {
   const apiKey = import.meta.env.VITE_AZURE_API_KEY;
   const endpoint = import.meta.env.VITE_AZURE_ENDPOINT;
 
@@ -45,9 +47,11 @@ Formato de Respuesta: Devuelve ÚNICAMENTE un objeto JSON plano, sin bloques de 
         model: "gpt-4o-mini",
         messages: [
           { role: 'system', content: systemPrompt },
-          { role: 'user', content: `Generate a song concept for the mood: "${mood}"` }
+          { role: 'user', content: `Generate a fresh, unique, and creative song concept for the mood/style: "${mood}"${genre ? ` and sub-style: "${genre}"` : ''}.
+${prevChords && prevChords.length > 0 ? `Avoid repeating the exact chord progression or theme from the previous session: ${JSON.stringify(prevChords)}. Create something harmonically distinct and fresh.` : ''}
+Make it innovative and avoid standard cliches. Current trigger: ${Date.now()}` }
         ],
-        temperature: 0.7,
+        temperature: 0.85,
         max_tokens: 300,
       }),
     });
@@ -57,13 +61,19 @@ Formato de Respuesta: Devuelve ÚNICAMENTE un objeto JSON plano, sin bloques de 
     }
 
     const data = await response.json();
+
+    // Track token usage
+    if (data.usage) {
+      recordTokenUsage('generateConcept', 'gpt-4o-mini', data.usage);
+    }
+
     let content = data.choices[0].message.content.trim();
 
     // Cleanup any accidental markdown blocks the AI might output despite instructions
-    if (content.startsWith('\`\`\`json')) {
-      content = content.replace(/^\`\`\`json/, '').replace(/\`\`\`$/, '').trim();
-    } else if (content.startsWith('\`\`\`')) {
-      content = content.replace(/^\`\`\`/, '').replace(/\`\`\`$/, '').trim();
+    if (content.startsWith('```json')) {
+      content = content.replace(/^```json/, '').replace(/```$/, '').trim();
+    } else if (content.startsWith('```')) {
+      content = content.replace(/^```/, '').replace(/```$/, '').trim();
     }
 
     const parsed: SongConceptResponse = JSON.parse(content);
