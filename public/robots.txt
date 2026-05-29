@@ -1,0 +1,5 @@
+User-agent: *
+Allow: /
+
+# Sitemap will be generated to /sitemap.xml
+Sitemap: /sitemap.xml
