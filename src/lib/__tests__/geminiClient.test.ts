@@ -35,6 +35,7 @@ const SAMPLE_PAYLOAD = {
 describe('Gemini proxy & client graceful fallback', () => {
   it('returns local fallback tip when GEMINI_API_KEY is not configured', async () => {
     delete process.env.GEMINI_API_KEY;
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
     const req = new Request('http://localhost/api/inspiration', {
       method: 'POST',
@@ -48,6 +49,7 @@ describe('Gemini proxy & client graceful fallback', () => {
     expect(data.source).toBe('fallback');
     expect(data.notice).toBe(LOCAL_FALLBACK_NOTICE);
     expect(String(data.strumTip)).toContain('C');
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('GEMINI_API_KEY'));
   });
 
   it('calls Gemini REST API with x-goog-api-key header and returns parsed verse when key is set', async () => {
@@ -104,6 +106,7 @@ describe('Gemini proxy & client graceful fallback', () => {
 
   it('falls back cleanly when Gemini upstream fails or returns invalid JSON', async () => {
     process.env.GEMINI_API_KEY = 'fake-test-gemini-key';
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(
       new Response('upstream error', { status: 500 }),
@@ -121,6 +124,12 @@ describe('Gemini proxy & client graceful fallback', () => {
     expect(data.source).toBe('fallback');
     expect(data.notice).toBe(LOCAL_FALLBACK_NOTICE);
     expect(data.fallbackReason).toBe('http_500');
+    expect(errorSpy).toHaveBeenCalledWith('[api/inspiration] Gemini upstream error', {
+      model: 'gemini-2.5-flash',
+      status: 500,
+      detail: 'upstream error',
+    });
+    expect(JSON.stringify(errorSpy.mock.calls)).not.toContain('fake-test-gemini-key');
   });
 
   it('disables thinking budget on gemini-2.5-flash, skips thought parts, and coerces array lyrics', async () => {

@@ -1,6 +1,15 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { ArrowRight, Compass, Play, Sparkles, Volume2 } from 'lucide-react';
+import {
+  ArrowLeft,
+  ArrowRight,
+  Compass,
+  HelpCircle,
+  Play,
+  Sparkles,
+  Volume2,
+  X,
+} from 'lucide-react';
 import { getGuitarChord, type GuitarChordVoicing } from '../data/chords';
 import {
   CIRCLE_POSITIONS,
@@ -74,6 +83,10 @@ function getNoteNameForStringIndex(
   return voicing.midiNotes[playedIdx];
 }
 
+const CIRCLE_TOUR_STORAGE_KEY = 'acordify_circle_tour_seen_v1';
+
+type TourTarget = 'wheel' | 'chords' | 'neighbors' | 'modulation' | 'compose';
+
 export const CircleOfFifthsView: React.FC<CircleOfFifthsViewProps> = ({
   activeKeyRoot,
   activeMode,
@@ -90,6 +103,45 @@ export const CircleOfFifthsView: React.FC<CircleOfFifthsViewProps> = ({
   );
   const [inspectedChordSymbol, setInspectedChordSymbol] = useState<string | null>(null);
   const [pluckTick, setPluckTick] = useState(0);
+  const [tourStep, setTourStep] = useState<number | null>(() => {
+    try {
+      return window.localStorage.getItem(CIRCLE_TOUR_STORAGE_KEY) ? null : 0;
+    } catch {
+      return 0;
+    }
+  });
+
+  const dismissTour = () => {
+    setTourStep(null);
+    try {
+      window.localStorage.setItem(CIRCLE_TOUR_STORAGE_KEY, '1');
+    } catch {
+      // Ignore storage errors in private mode
+    }
+  };
+
+  const goToTourStep = (nextStep: number) => {
+    setTourStep(nextStep);
+    if (nextStep === 3) {
+      setNeighborFocus('dominant');
+    }
+  };
+
+  const restartTour = () => {
+    setNeighborFocus('dominant');
+    setTourStep(0);
+  };
+
+  useEffect(() => {
+    if (tourStep === null) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        dismissTour();
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [tourStep]);
 
   const activePos = useMemo(
     () => getCirclePositionForKey(selectedKeyRoot, selectedMode),
@@ -170,6 +222,48 @@ export const CircleOfFifthsView: React.FC<CircleOfFifthsViewProps> = ({
   const focusedNeighbor = neighbors[neighborFocus];
   const focusedComparison = focusedNeighbor.comparison;
 
+  const tourSteps = useMemo<Array<{ target: TourTarget; title: string; body: string }>>(() => {
+    const modeName = selectedMode === 'major' ? 'Mayor' : 'Menor';
+    const subName = `${neighbors.subdominant.root}${neighbors.subdominant.mode === 'minor' ? 'm' : ''}`;
+    const domName = `${neighbors.dominant.root}${neighbors.dominant.mode === 'minor' ? 'm' : ''}`;
+    const changed = neighbors.dominant.comparison.changedNotes[0];
+    const diffText = changed
+      ? `solo cambia 1 nota (${changed.removed} → ${changed.added})`
+      : 'cambia una sola nota de la escala';
+
+    return [
+      {
+        target: 'wheel',
+        title: '1. Qué es cada rebanada de la rueda',
+        body: `Cada rebanada es una tonalidad: una familia de acordes que suenan bien juntos. El anillo exterior reúne tonos mayores y el interior sus relativas menores (mismas notas, otro centro).`,
+      },
+      {
+        target: 'chords',
+        title: `2. Los 7 acordes de ${selectedKeyRoot} ${modeName} y sus funciones`,
+        body: 'Estos 7 botones salen directo de la escala: "Descanso" es la casa, "Movimiento" abre la frase y "Tensión" pide volver a casa. Pulsa cualquiera para oírlo y ver dedos, cuerdas al aire (○) y cuerdas mudas (×).',
+      },
+      {
+        target: 'neighbors',
+        title: `3. Por qué ${subName} y ${domName} son tus vecinas`,
+        body: `Las tonalidades que tocan a ${selectedKeyRoot} ${modeName} a izquierda y derecha comparten casi las mismas notas y hasta 4 acordes iguales, por eso mezclan sin chocar.`,
+      },
+      {
+        target: 'modulation',
+        title: `4. Qué cambia si te mueves a ${domName}`,
+        body: `Al saltar de ${selectedKeyRoot} ${modeName} a su vecina ${domName} ${diffText}. Los acordes compartidos sirven de puente para cambiar de ambiente sin corte brusco.`,
+      },
+      {
+        target: 'compose',
+        title: `5. Lleva ${selectedKeyRoot} ${modeName} al generador`,
+        body: `Cuando te guste una tonalidad, pulsa "Componer en ${selectedKeyRoot} ${modeName}" arriba a la derecha para cargar 4 acordes listos para tocar en loop.`,
+      },
+    ];
+  }, [neighbors, selectedKeyRoot, selectedMode]);
+
+  const activeTour = tourStep !== null ? tourSteps[tourStep] : null;
+  const ringFor = (target: TourTarget) =>
+    activeTour?.target === target ? 'ring-2 ring-[var(--color-accent)] ring-offset-2' : '';
+
   return (
     <section aria-label="Círculo de Quintas interactivo" className="space-y-6">
       {/* Header Row */}
@@ -177,7 +271,7 @@ export const CircleOfFifthsView: React.FC<CircleOfFifthsViewProps> = ({
         <div className="space-y-1.5">
           <p className="inline-flex items-center gap-1.5 font-mono text-xs uppercase tracking-[0.14em] text-[var(--color-ink-muted)]">
             <Compass className="w-3.5 h-3.5" />
-            <span>Armonía conectada · Estos quedan con estos</span>
+            <span>Mapa de tonalidades · Qué acordes suenan bien juntos</span>
           </p>
           <h1 className="text-[32px] sm:text-[42px] font-medium tracking-[-0.03em] leading-[1.08] text-[var(--color-ink)]">
             Círculo de Quintas{' '}
@@ -186,26 +280,107 @@ export const CircleOfFifthsView: React.FC<CircleOfFifthsViewProps> = ({
             </span>
           </h1>
           <p className="text-sm text-[var(--color-ink-secondary)] max-w-2xl">
-            Pulsa cualquier tonalidad para ver sus acordes, sus vecinos compatibles y cómo cambiar de tono sin romper la canción.
+            Cada rebanada agrupa una familia de acordes compatibles. Pulsa cualquier tono para oír sus 7 acordes, ver qué comparten con sus vecinos y llevarlo al generador.
           </p>
         </div>
 
-        <button
-          type="button"
-          onClick={() => onComposeInKey(selectedKeyRoot, selectedMode)}
-          className="btn-primary self-start md:self-auto shrink-0 px-4 py-2.5 text-xs"
-        >
-          <Sparkles className="w-3.5 h-3.5" />
-          <span>
-            Componer en {selectedKeyRoot} {selectedMode === 'major' ? 'Mayor' : 'Menor'}
-          </span>
-        </button>
+        <div className="flex flex-wrap items-center gap-2 self-start md:self-auto shrink-0">
+          <button
+            type="button"
+            onClick={restartTour}
+            className="btn-secondary bg-[var(--color-surface)] px-3.5 py-2.5 text-xs"
+          >
+            <HelpCircle className="w-3.5 h-3.5" />
+            <span>Ver guía</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => onComposeInKey(selectedKeyRoot, selectedMode)}
+            className={`btn-primary px-4 py-2.5 text-xs transition-shadow ${ringFor('compose')}`}
+          >
+            <Sparkles className="w-3.5 h-3.5" />
+            <span>
+              Componer en {selectedKeyRoot} {selectedMode === 'major' ? 'Mayor' : 'Menor'}
+            </span>
+          </button>
+        </div>
       </div>
+
+      {/* Non-blocking 5-Step Guided Tour Banner */}
+      <AnimatePresence initial={false}>
+        {activeTour && tourStep !== null && (
+          <motion.div
+            key="circle-tour-banner"
+            initial={{ opacity: 0, y: -6 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -4 }}
+            transition={{ duration: 0.16 }}
+            role="region"
+            aria-label="Guía del Círculo de Quintas"
+            data-circle-tour="true"
+            className="surface-card border-[var(--color-accent)] bg-[var(--color-surface)] p-4 sm:px-5 shadow-[0_12px_28px_-14px_rgba(17,17,17,0.14)]"
+          >
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="space-y-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="rounded-full bg-[var(--color-accent-tint)] px-2.5 py-0.5 font-mono text-[11px] font-medium text-[var(--color-accent)]">
+                    Paso {tourStep + 1} de {tourSteps.length}
+                  </span>
+                  <h2 className="text-sm sm:text-base font-medium text-[var(--color-ink)]">
+                    {activeTour.title}
+                  </h2>
+                </div>
+                <p className="text-xs sm:text-sm text-[var(--color-ink-secondary)] leading-relaxed">
+                  {activeTour.body}
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
+                <button
+                  type="button"
+                  onClick={dismissTour}
+                  className="btn-secondary bg-[var(--color-surface)] px-3 py-1.5 text-xs"
+                >
+                  <X className="w-3.5 h-3.5" />
+                  <span>Omitir</span>
+                </button>
+                <button
+                  type="button"
+                  disabled={tourStep === 0}
+                  onClick={() => goToTourStep(Math.max(0, tourStep - 1))}
+                  className="btn-secondary bg-[var(--color-surface)] px-3 py-1.5 text-xs disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  <ArrowLeft className="w-3.5 h-3.5" />
+                  <span>Anterior</span>
+                </button>
+                {tourStep < tourSteps.length - 1 ? (
+                  <button
+                    type="button"
+                    onClick={() => goToTourStep(tourStep + 1)}
+                    className="btn-primary px-3.5 py-1.5 text-xs"
+                  >
+                    <span>Siguiente</span>
+                    <ArrowRight className="w-3.5 h-3.5" />
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={dismissTour}
+                    className="btn-primary px-3.5 py-1.5 text-xs"
+                  >
+                    <span>Entendido</span>
+                  </button>
+                )}
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Main Two-Column Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         {/* Left: Interactive SVG Wheel */}
-        <div className="lg:col-span-5 surface-card p-4 sm:p-5 space-y-4">
+        <div className={`lg:col-span-5 surface-card p-4 sm:p-5 space-y-4 transition-shadow ${ringFor('wheel')}`}>
           <div className="flex flex-wrap items-center justify-between gap-2">
             {/* Fifths / Fourths toggle */}
             <div
@@ -470,73 +645,81 @@ export const CircleOfFifthsView: React.FC<CircleOfFifthsViewProps> = ({
           <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1.5 pt-2 border-t border-[var(--color-border)] text-[11px] font-mono text-[var(--color-ink-muted)]">
             <span className="inline-flex items-center gap-1.5">
               <span className="h-2.5 w-2.5 rounded-full bg-[var(--color-ink)]" />
-              <span>Activa</span>
+              <span>Tono elegido</span>
             </span>
             <span className="inline-flex items-center gap-1.5">
               <span className="h-2.5 w-2.5 rounded-full border border-[var(--color-accent)] bg-[var(--color-accent-tint)]" />
-              <span>Relativa</span>
+              <span>Relativa (mismas notas)</span>
             </span>
             <span className="inline-flex items-center gap-1.5">
               <span className="h-0.5 w-3.5 bg-[var(--color-accent)]" />
-              <span>Dominante (+1)</span>
+              <span>Vecina +1 (más brillo)</span>
             </span>
             <span className="inline-flex items-center gap-1.5">
               <span className="h-0.5 w-3.5 border-b-2 border-dashed border-[var(--color-ink-muted)]" />
-              <span>Subdominante (−1)</span>
+              <span>Vecina −1 (más calma)</span>
             </span>
           </div>
         </div>
 
-        {/* Right: Diatonic Chords + Neighbor "Estos quedan con estos" */}
+        {/* Right: Diatonic Chords + Neighbor Compatibility */}
         <div className="lg:col-span-7 space-y-5">
           {/* Card A: Scale, Key Signature & 7 Diatonic Chords */}
-          <div className="surface-card p-4 sm:p-5 space-y-4">
-            <div className="flex flex-wrap items-start justify-between gap-3 border-b border-[var(--color-border)] pb-3.5">
-              <div>
-                <p className="font-mono text-xs uppercase tracking-[0.12em] text-[var(--color-ink-muted)]">
-                  Armadura: {activePos.signatureLabel}
-                </p>
-                <p className="mt-1 font-mono text-xs text-[var(--color-ink-secondary)]">
-                  Escala: <span className="text-[var(--color-ink)] font-medium">{scaleNotes.join(' · ')}</span>
-                </p>
+          <div className={`surface-card p-4 sm:p-5 space-y-4 transition-shadow ${ringFor('chords')}`}>
+            <div className="border-b border-[var(--color-border)] pb-3.5 space-y-2">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <p className="font-mono text-xs uppercase tracking-[0.12em] text-[var(--color-ink-muted)]">
+                    Armadura: {activePos.signatureLabel}
+                  </p>
+                  <p className="mt-1 font-mono text-xs text-[var(--color-ink-secondary)]">
+                    Escala: <span className="text-[var(--color-ink)] font-medium">{scaleNotes.join(' · ')}</span>
+                  </p>
+                </div>
+
+                <div
+                  className="inline-flex rounded-full bg-[var(--color-surface-subtle)] p-1"
+                  role="group"
+                  aria-label="Tipo de acorde diatónico"
+                >
+                  {(
+                    [
+                      { id: 'triads', label: 'Tríadas' },
+                      { id: 'tetrads', label: 'Tétradas (7ª)' },
+                    ] as const
+                  ).map((t) => {
+                    const active = chordDisplay === t.id;
+                    return (
+                      <button
+                        key={t.id}
+                        type="button"
+                        onClick={() => setChordDisplay(t.id)}
+                        className={`relative px-3 py-1 rounded-full text-xs font-medium cursor-pointer transition-colors ${
+                          active
+                            ? 'text-[var(--color-ink)]'
+                            : 'text-[var(--color-ink-secondary)] hover:text-[var(--color-ink)]'
+                        }`}
+                      >
+                        {active && (
+                          <motion.span
+                            layoutId="circle-chord-type"
+                            transition={{ type: 'spring', stiffness: 460, damping: 34 }}
+                            className="absolute inset-0 rounded-full bg-[var(--color-surface)] border border-[var(--color-border)] shadow-xs"
+                            aria-hidden="true"
+                          />
+                        )}
+                        <span className="relative z-10">{t.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
 
-              <div
-                className="inline-flex rounded-full bg-[var(--color-surface-subtle)] p-1"
-                role="group"
-                aria-label="Tipo de acorde diatónico"
-              >
-                {(
-                  [
-                    { id: 'triads', label: 'Tríadas' },
-                    { id: 'tetrads', label: 'Tétradas (7ª)' },
-                  ] as const
-                ).map((t) => {
-                  const active = chordDisplay === t.id;
-                  return (
-                    <button
-                      key={t.id}
-                      type="button"
-                      onClick={() => setChordDisplay(t.id)}
-                      className={`relative px-3 py-1 rounded-full text-xs font-medium cursor-pointer transition-colors ${
-                        active
-                          ? 'text-[var(--color-ink)]'
-                          : 'text-[var(--color-ink-secondary)] hover:text-[var(--color-ink)]'
-                      }`}
-                    >
-                      {active && (
-                        <motion.span
-                          layoutId="circle-chord-type"
-                          transition={{ type: 'spring', stiffness: 460, damping: 34 }}
-                          className="absolute inset-0 rounded-full bg-[var(--color-surface)] border border-[var(--color-border)] shadow-xs"
-                          aria-hidden="true"
-                        />
-                      )}
-                      <span className="relative z-10">{t.label}</span>
-                    </button>
-                  );
-                })}
-              </div>
+              <p className="text-xs text-[var(--color-ink-secondary)]">
+                {chordDisplay === 'triads'
+                  ? 'Tríadas: acordes básicos de 3 notas, ideales para acompañar canciones.'
+                  : 'Tétradas (7ª): suman una 4ª nota para dar un color más suave o jazz.'}
+              </p>
             </div>
 
             {/* 7 Diatonic Chord Buttons */}
@@ -577,7 +760,7 @@ export const CircleOfFifthsView: React.FC<CircleOfFifthsViewProps> = ({
 
             {/* Inspected Chord Diagram Preview */}
             <div className="rounded-[12px] border border-[var(--color-border)] bg-[var(--color-surface-board)] p-4 flex flex-col sm:flex-row items-center gap-5">
-              <div className="shrink-0">
+              <div className="shrink-0 flex flex-col items-center gap-2">
                 <Fretboard
                   frets={inspectedVoicing.frets}
                   fingers={inspectedVoicing.fingers}
@@ -591,6 +774,9 @@ export const CircleOfFifthsView: React.FC<CircleOfFifthsViewProps> = ({
                     if (note) onPluckNote(note);
                   }}
                 />
+                <p className="font-mono text-[10px] text-[var(--color-ink-muted)] text-center">
+                  ○ cuerda al aire · × no tocar · naranja tónica · 1–4 dedos
+                </p>
               </div>
               <div className="flex-1 space-y-2 text-center sm:text-left">
                 <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2">
@@ -620,14 +806,17 @@ export const CircleOfFifthsView: React.FC<CircleOfFifthsViewProps> = ({
           </div>
 
           {/* Card B: Harmonic Neighbors & Pivot Modulation */}
-          <div className="surface-card p-4 sm:p-5 space-y-4">
+          <div className={`surface-card p-4 sm:p-5 space-y-4 transition-shadow ${ringFor('neighbors')}`}>
             <div>
               <p className="font-mono text-xs uppercase tracking-[0.12em] text-[var(--color-ink-muted)]">
-                Si te mueves de tonalidad
+                Por qué quedan bien juntos
               </p>
               <h2 className="text-xl font-medium text-[var(--color-ink)] mt-0.5">
-                Estos quedan con estos
+                Tonalidades vecinas (compatibles)
               </h2>
+              <p className="text-xs text-[var(--color-ink-secondary)] mt-1">
+                Comparten casi las mismas notas; úsalas como puente para cambiar de ambiente sin perder el hilo.
+              </p>
             </div>
 
             {/* Neighbor tabs */}
@@ -636,21 +825,24 @@ export const CircleOfFifthsView: React.FC<CircleOfFifthsViewProps> = ({
                 [
                   {
                     id: 'subdominant',
-                    label: `Subdominante · ${neighbors.subdominant.root}${
+                    label: `Vecina −1 · ${neighbors.subdominant.root}${
                       neighbors.subdominant.mode === 'minor' ? 'm' : ''
                     }`,
+                    hint: 'Subdominante (−1): una nota menos de brillo, aporta calma',
                   },
                   {
                     id: 'relative',
                     label: `Relativa · ${neighbors.relative.root}${
                       neighbors.relative.mode === 'minor' ? 'm' : ''
                     }`,
+                    hint: 'Relativa: usa exactamente las mismas notas que la tonalidad actual',
                   },
                   {
                     id: 'dominant',
-                    label: `Dominante · ${neighbors.dominant.root}${
+                    label: `Vecina +1 · ${neighbors.dominant.root}${
                       neighbors.dominant.mode === 'minor' ? 'm' : ''
                     }`,
+                    hint: 'Dominante (+1): suma tensión y brillo hacia el siguiente tono',
                   },
                 ] as const
               ).map((tab) => {
@@ -659,6 +851,7 @@ export const CircleOfFifthsView: React.FC<CircleOfFifthsViewProps> = ({
                   <button
                     key={tab.id}
                     type="button"
+                    title={tab.hint}
                     onClick={() => setNeighborFocus(tab.id)}
                     className={`relative rounded-lg px-3 py-2 text-xs font-medium cursor-pointer transition-colors ${
                       active
@@ -687,7 +880,7 @@ export const CircleOfFifthsView: React.FC<CircleOfFifthsViewProps> = ({
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -4 }}
                 transition={{ duration: 0.16 }}
-                className="rounded-[12px] border border-[var(--color-border)] bg-[var(--color-surface-board)] p-4 space-y-3"
+                className={`rounded-[12px] border border-[var(--color-border)] bg-[var(--color-surface-board)] p-4 space-y-3 transition-shadow ${ringFor('modulation')}`}
               >
                 <p className="text-sm text-[var(--color-ink)] leading-relaxed">
                   {focusedComparison.summary}
@@ -696,7 +889,7 @@ export const CircleOfFifthsView: React.FC<CircleOfFifthsViewProps> = ({
                 {/* Shared Pivot Chords */}
                 <div className="space-y-1.5">
                   <p className="font-mono text-[11px] uppercase tracking-wider text-[var(--color-ink-muted)]">
-                    Acordes pivote que ya tienes (pulsa para escuchar)
+                    Acordes compartidos (puentes para cambiar de tono · pulsa para oír)
                   </p>
                   <div className="flex flex-wrap gap-1.5">
                     {focusedComparison.sharedChords.map((shared) => {

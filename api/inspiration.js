@@ -230,7 +230,10 @@ async function discoverFallbackGeminiModels(apiKey, excludeSet) {
         signal: AbortSignal.timeout(4000),
       },
     );
-    if (!res.ok) return [];
+    if (!res.ok) {
+      console.warn('[api/inspiration] ListModels fallback unavailable', { status: res.status });
+      return [];
+    }
 
     const payload = await res.json();
     const models = Array.isArray(payload?.models) ? payload.models : [];
@@ -301,6 +304,7 @@ export async function POST(request) {
 
   const apiKey = process.env.GEMINI_API_KEY?.trim() ?? '';
   if (!apiKey) {
+    console.warn('[api/inspiration] fallback: missing GEMINI_API_KEY env var');
     return jsonResponse(buildLocalStrumFallback(input, 'missing_key'), 200);
   }
 
@@ -341,6 +345,7 @@ export async function POST(request) {
         const strumTip = typeof parsed?.strumTip === 'string' ? parsed.strumTip.trim() : '';
 
         if (!title || !lyrics || !strumTip) {
+          console.warn('[api/inspiration] Gemini response missing required fields', { model });
           lastReason = 'missing_fields';
           break;
         }
@@ -360,13 +365,28 @@ export async function POST(request) {
         );
       }
 
+      const rawErrText = await geminiRes.text().catch(() => '');
+      const detail = rawErrText
+        .replaceAll(apiKey, '[REDACTED]')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .slice(0, 280);
+      console.error('[api/inspiration] Gemini upstream error', {
+        model,
+        status: geminiRes.status,
+        detail,
+      });
+
       lastReason = `http_${geminiRes.status}`;
       const isRetryableStatus = [404, 429, 503].includes(geminiRes.status);
       if (isRetryableStatus && !discoveredOnce) {
         discoveredOnce = true;
         const candidates = await discoverFallbackGeminiModels(apiKey, tried);
-        if (candidates.length === 0 && geminiRes.status === 404) {
-          lastReason = 'http_404_no_models';
+        if (candidates.length === 0) {
+          console.warn('[api/inspiration] ListModels returned 0 eligible models');
+          if (geminiRes.status === 404) {
+            lastReason = 'http_404_no_models';
+          }
         }
         queue.push(...candidates);
       }
@@ -382,6 +402,11 @@ export async function POST(request) {
       err && typeof err === 'object' && 'name' in err && err.name === 'TimeoutError'
         ? 'timeout'
         : 'parse_or_network_error';
+    console.error('[api/inspiration] Gemini request exception', {
+      reason,
+      attemptedModels,
+      message: err instanceof Error ? err.message : String(err),
+    });
     return jsonResponse(buildLocalStrumFallback(input, reason, attemptedModels), 200);
   }
 }

@@ -241,7 +241,7 @@ export const ProgressionStrip: React.FC<ProgressionStripProps> = ({
 
       {/* Concise Diagram Legend */}
       <div className="flex flex-wrap items-center justify-between gap-2 px-1 font-mono text-[11px] text-[var(--color-ink-muted)]">
-        <div className="flex flex-wrap items-center gap-4">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5">
           <span className="inline-flex items-center gap-1.5">
             <span className="h-2.5 w-2.5 rounded-full bg-[var(--color-accent)]" />
             <span>Tónica (raíz)</span>
@@ -251,6 +251,19 @@ export const ProgressionStrip: React.FC<ProgressionStripProps> = ({
               1
             </span>
             <span>Números = dedos</span>
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <span
+              className="inline-block h-2.5 w-2.5 rounded-full border-[1.5px] border-[var(--color-ink)]"
+              aria-hidden="true"
+            />
+            <span>Cuerda al aire</span>
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <span className="font-mono font-bold text-[var(--color-ink)]" aria-hidden="true">
+              ×
+            </span>
+            <span>No tocar</span>
           </span>
         </div>
         <span>Pulsa una cuerda en el diagrama para oírla</span>
