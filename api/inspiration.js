@@ -12,8 +12,9 @@ const LOCAL_FALLBACK_NOTICE =
  *   strumPattern?: 'folk' | 'arpeggio' | 'ballad';
  *   theme?: string;
  * }} input
+ * @param {string} [fallbackReason='unavailable']
  */
-function buildLocalStrumFallback(input) {
+function buildLocalStrumFallback(input, fallbackReason = 'unavailable') {
   const c0 = input.chords[0] ?? input.keyRoot;
   const c1 = input.chords[1] ?? c0;
   const c2 = input.chords[2] ?? c0;
@@ -36,6 +37,7 @@ function buildLocalStrumFallback(input) {
     lyrics: null,
     strumTip,
     notice: LOCAL_FALLBACK_NOTICE,
+    fallbackReason,
   };
 }
 
@@ -131,9 +133,10 @@ function extractGeminiJsonText(payload) {
       ? firstCandidate.content
       : undefined;
   const parts = Array.isArray(content?.parts) ? content.parts : [];
-  const textPart = parts.find(
-    (p) => typeof p === 'object' && p !== null && typeof p.text === 'string',
-  );
+  const textPart =
+    parts.find(
+      (p) => typeof p === 'object' && p !== null && p.thought !== true && typeof p.text === 'string',
+    ) ?? parts.find((p) => typeof p === 'object' && p !== null && typeof p.text === 'string');
 
   if (!textPart) {
     throw new Error('Missing text part in Gemini response');
@@ -188,10 +191,11 @@ export async function POST(request) {
 
   const apiKey = process.env.GEMINI_API_KEY?.trim() ?? '';
   if (!apiKey) {
-    return jsonResponse(buildLocalStrumFallback(input), 200);
+    return jsonResponse(buildLocalStrumFallback(input, 'missing_key'), 200);
   }
 
   const model = process.env.GEMINI_MODEL?.trim() || 'gemini-2.5-flash';
+  const isFlash25 = /^gemini-2\.5-flash/i.test(model);
   const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(
     model,
   )}:generateContent`;
@@ -212,26 +216,44 @@ export async function POST(request) {
         ],
         generationConfig: {
           responseMimeType: 'application/json',
+          responseSchema: {
+            type: 'OBJECT',
+            properties: {
+              title: { type: 'STRING' },
+              lyrics: { type: 'STRING' },
+              strumTip: { type: 'STRING' },
+            },
+            required: ['title', 'lyrics', 'strumTip'],
+          },
           temperature: 0.75,
-          maxOutputTokens: 300,
+          maxOutputTokens: 700,
+          ...(isFlash25 ? { thinkingConfig: { thinkingBudget: 0 } } : {}),
         },
       }),
       signal: AbortSignal.timeout(10000),
     });
 
     if (!geminiRes.ok) {
-      return jsonResponse(buildLocalStrumFallback(input), 200);
+      return jsonResponse(buildLocalStrumFallback(input, `http_${geminiRes.status}`), 200);
     }
 
     const payload = await geminiRes.json();
     const parsed = extractGeminiJsonText(payload);
 
     const title = typeof parsed?.title === 'string' ? parsed.title.trim() : '';
-    const lyrics = typeof parsed?.lyrics === 'string' ? parsed.lyrics.trim() : '';
+    const lyrics = Array.isArray(parsed?.lyrics)
+      ? parsed.lyrics
+          .filter((line) => typeof line === 'string')
+          .map((line) => line.trim())
+          .filter(Boolean)
+          .join('\n')
+      : typeof parsed?.lyrics === 'string'
+        ? parsed.lyrics.trim()
+        : '';
     const strumTip = typeof parsed?.strumTip === 'string' ? parsed.strumTip.trim() : '';
 
     if (!title || !lyrics || !strumTip) {
-      return jsonResponse(buildLocalStrumFallback(input), 200);
+      return jsonResponse(buildLocalStrumFallback(input, 'missing_fields'), 200);
     }
 
     return jsonResponse(
@@ -245,7 +267,11 @@ export async function POST(request) {
       },
       200,
     );
-  } catch {
-    return jsonResponse(buildLocalStrumFallback(input), 200);
+  } catch (err) {
+    const reason =
+      err && typeof err === 'object' && 'name' in err && err.name === 'TimeoutError'
+        ? 'timeout'
+        : 'parse_or_network_error';
+    return jsonResponse(buildLocalStrumFallback(input, reason), 200);
   }
 }

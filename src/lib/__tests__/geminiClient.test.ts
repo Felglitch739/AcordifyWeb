@@ -119,6 +119,72 @@ describe('Gemini proxy & client graceful fallback', () => {
     const data = (await res.json()) as Record<string, unknown>;
     expect(data.source).toBe('fallback');
     expect(data.notice).toBe(LOCAL_FALLBACK_NOTICE);
+    expect(data.fallbackReason).toBe('http_500');
+  });
+
+  it('disables thinking budget on gemini-2.5-flash, skips thought parts, and coerces array lyrics', async () => {
+    process.env.GEMINI_API_KEY = 'fake-test-gemini-key';
+    process.env.GEMINI_MODEL = 'gemini-2.5-flash';
+
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          candidates: [
+            {
+              content: {
+                parts: [
+                  { thought: true, text: 'reasoning draft that is not json' },
+                  {
+                    text: JSON.stringify({
+                      title: 'Cafetera tibia',
+                      lyrics: [
+                        '[C]Lluvia fina en el cristal',
+                        '[Am]suena el cuarto al despertar',
+                        '[F]queda abierta la canción',
+                        '[G]vuelve el pulso a comenzar',
+                      ],
+                      strumTip: 'Rasgueo suave hacia abajo en C y Am; deja respirar G al cerrar.',
+                    }),
+                  },
+                ],
+              },
+            },
+          ],
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      ),
+    );
+
+    const req = new Request('http://localhost/api/inspiration', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(SAMPLE_PAYLOAD),
+    });
+
+    const res = await POST(req);
+    expect(res.status).toBe(200);
+    const data = (await res.json()) as Record<string, unknown>;
+
+    const [, init] = fetchSpy.mock.calls[0];
+    const sentBody = JSON.parse(String(init?.body)) as {
+      generationConfig: {
+        maxOutputTokens: number;
+        thinkingConfig?: { thinkingBudget: number };
+        responseSchema?: { required?: string[] };
+      };
+    };
+
+    expect(sentBody.generationConfig.maxOutputTokens).toBe(700);
+    expect(sentBody.generationConfig.thinkingConfig).toEqual({ thinkingBudget: 0 });
+    expect(sentBody.generationConfig.responseSchema?.required).toEqual([
+      'title',
+      'lyrics',
+      'strumTip',
+    ]);
+
+    expect(data.source).toBe('gemini');
+    expect(data.title).toBe('Cafetera tibia');
+    expect(String(data.lyrics)).toContain('[C]Lluvia fina en el cristal\n[Am]suena el cuarto');
   });
 
   it('requestInspiration client returns local fallback cleanly on network errors', async () => {
