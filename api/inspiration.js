@@ -157,6 +157,15 @@ function extractGeminiJsonText(payload) {
 }
 
 /**
+ * @returns {Promise<Response>}
+ */
+export async function GET() {
+  const aiConfigured = Boolean(process.env.GEMINI_API_KEY?.trim());
+  const model = process.env.GEMINI_MODEL?.trim() || 'gemini-2.5-flash';
+  return jsonResponse({ aiConfigured, model }, 200);
+}
+
+/**
  * @param {Request} request
  * @returns {Promise<Response>}
  */

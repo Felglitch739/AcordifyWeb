@@ -2,6 +2,26 @@ import { buildLocalStrumFallback, type InspirationRequest, type InspirationRespo
 
 export type { InspirationRequest, InspirationResponse };
 
+export interface InspirationStatus {
+  aiConfigured: boolean;
+}
+
+export async function fetchInspirationStatus(): Promise<InspirationStatus> {
+  try {
+    const res = await fetch('/api/inspiration', {
+      method: 'GET',
+      signal: AbortSignal.timeout(4000),
+    });
+    if (!res.ok) {
+      return { aiConfigured: false };
+    }
+    const data = (await res.json()) as Partial<InspirationStatus>;
+    return { aiConfigured: Boolean(data.aiConfigured) };
+  } catch {
+    return { aiConfigured: false };
+  }
+}
+
 export async function requestInspiration(
   input: InspirationRequest,
 ): Promise<InspirationResponse> {

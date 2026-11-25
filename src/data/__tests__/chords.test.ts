@@ -54,6 +54,17 @@ describe('curated guitar chord dictionary', () => {
         }
         // Must contain all 3 notes of the triad
         expect(actualPitchClasses.size).toBe(3);
+
+        // Must carry valid finger numbers 0..4 and non-empty root string indices
+        expect(voicing.fingers).toHaveLength(6);
+        for (let i = 0; i < 6; i++) {
+          expect(voicing.fingers[i]).toBeGreaterThanOrEqual(0);
+          expect(voicing.fingers[i]).toBeLessThanOrEqual(4);
+          if (voicing.frets[i] > 0) {
+            expect(voicing.fingers[i]).toBeGreaterThanOrEqual(1);
+          }
+        }
+        expect(voicing.rootStrings.length).toBeGreaterThanOrEqual(1);
       }
     }
   });

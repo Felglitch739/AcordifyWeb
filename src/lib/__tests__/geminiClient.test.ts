@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { POST } from '../../../api/inspiration.js';
+import { GET, POST } from '../../../api/inspiration.js';
 import { LOCAL_FALLBACK_NOTICE } from '../localStrumTip';
-import { requestInspiration } from '../geminiClient';
+import { fetchInspirationStatus, requestInspiration } from '../geminiClient';
 
 const ORIGINAL_KEY = process.env.GEMINI_API_KEY;
 const ORIGINAL_MODEL = process.env.GEMINI_MODEL;
@@ -128,5 +128,22 @@ describe('Gemini proxy & client graceful fallback', () => {
     expect(result.source).toBe('fallback');
     expect(result.notice).toBe(LOCAL_FALLBACK_NOTICE);
     expect(result.strumTip).toContain('C');
+  });
+
+  it('GET /api/inspiration reports aiConfigured truthfully without exposing keys', async () => {
+    delete process.env.GEMINI_API_KEY;
+    const unconfiguredRes = await GET();
+    expect(unconfiguredRes.status).toBe(200);
+    const unconfiguredJson = (await unconfiguredRes.json()) as { aiConfigured: boolean };
+    expect(unconfiguredJson.aiConfigured).toBe(false);
+
+    process.env.GEMINI_API_KEY = 'fake-test-gemini-key';
+    const configuredRes = await GET();
+    expect(configuredRes.status).toBe(200);
+    const configuredJson = (await configuredRes.json()) as { aiConfigured: boolean };
+    expect(configuredJson.aiConfigured).toBe(true);
+
+    vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('offline'));
+    expect(await fetchInspirationStatus()).toEqual({ aiConfigured: false });
   });
 });

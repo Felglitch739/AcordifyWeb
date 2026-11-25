@@ -1,6 +1,6 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { BookOpen, Cloud, LogOut, Play, Trash2, X } from 'lucide-react';
+import { BookOpen, BookmarkPlus, Cloud, LogOut, Play, Trash2, X } from 'lucide-react';
 import type { AuthUserSummary } from '../lib/neonAuth';
 import type { SavedProgression } from '../storage';
 import { MOOD_OPTIONS } from '../theory';
@@ -8,11 +8,13 @@ import { MOOD_OPTIONS } from '../theory';
 interface SavedProgressionsDrawerProps {
   isOpen: boolean;
   items: SavedProgression[];
+  defaultSaveName?: string;
   storageMode?: 'local' | 'cloud';
   isAuthConfigured?: boolean;
   authUser?: AuthUserSummary | null;
   onOpenAuth?: () => void;
   onSignOut?: () => void;
+  onQuickSave?: (name: string) => void;
   onClose: () => void;
   onLoad: (item: SavedProgression) => void;
   onDelete: (id: string) => void;
@@ -33,15 +35,19 @@ function formatSavedDate(iso: string): string {
 export const SavedProgressionsDrawer: React.FC<SavedProgressionsDrawerProps> = ({
   isOpen,
   items,
+  defaultSaveName = '',
   storageMode = 'local',
   isAuthConfigured = false,
   authUser = null,
   onOpenAuth,
   onSignOut,
+  onQuickSave,
   onClose,
   onLoad,
   onDelete,
 }) => {
+  const [quickName, setQuickName] = useState('');
+
   useEffect(() => {
     if (!isOpen) return;
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -110,6 +116,39 @@ export const SavedProgressionsDrawer: React.FC<SavedProgressionsDrawerProps> = (
         </div>
 
         <div className="mt-4 flex-1 overflow-y-auto space-y-3 pr-1">
+          {onQuickSave && (
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                const targetName = quickName.trim() || defaultSaveName || 'Progresión guardada';
+                onQuickSave(targetName);
+                setQuickName('');
+              }}
+              className="rounded-[12px] border border-[var(--color-border)] bg-[var(--color-surface-board)] p-3 space-y-2"
+            >
+              <label
+                htmlFor="drawer-quick-save-name"
+                className="block font-mono text-[11px] uppercase tracking-wider text-[var(--color-ink-muted)]"
+              >
+                Guardar progresión actual
+              </label>
+              <div className="flex items-center gap-2">
+                <input
+                  id="drawer-quick-save-name"
+                  type="text"
+                  value={quickName}
+                  onChange={(e) => setQuickName(e.target.value)}
+                  placeholder={defaultSaveName || 'Ej. Balada en Sol'}
+                  className="flex-1 min-w-0 rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-1.5 text-xs text-[var(--color-ink)] placeholder:text-[var(--color-ink-muted)] focus:border-[var(--color-ink)] focus:outline-none"
+                />
+                <button type="submit" className="btn-primary px-3 py-1.5 text-xs shrink-0">
+                  <BookmarkPlus className="w-3.5 h-3.5" />
+                  <span>Guardar</span>
+                </button>
+              </div>
+            </form>
+          )}
+
           {items.length === 0 ? (
             <div className="rounded-[12px] border border-dashed border-[var(--color-border)] bg-[var(--color-surface-board)] p-6 text-center">
               <p className="text-sm font-medium text-[var(--color-ink)]">

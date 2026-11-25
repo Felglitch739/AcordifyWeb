@@ -580,6 +580,8 @@ export const CircleOfFifthsView: React.FC<CircleOfFifthsViewProps> = ({
               <div className="shrink-0">
                 <Fretboard
                   frets={inspectedVoicing.frets}
+                  fingers={inspectedVoicing.fingers}
+                  rootStrings={inspectedVoicing.rootStrings}
                   startFret={inspectedVoicing.startFret}
                   barre={inspectedVoicing.barre}
                   isActive={pluckTick > 0}

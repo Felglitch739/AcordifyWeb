@@ -171,6 +171,8 @@ export const ProgressionStrip: React.FC<ProgressionStripProps> = ({
                 >
                   <Fretboard
                     frets={voicing.frets}
+                    fingers={voicing.fingers}
+                    rootStrings={voicing.rootStrings}
                     startFret={voicing.startFret}
                     barre={voicing.barre}
                     isActive={isActive}
@@ -235,6 +237,23 @@ export const ProgressionStrip: React.FC<ProgressionStripProps> = ({
             </motion.article>
           );
         })}
+      </div>
+
+      {/* Concise Diagram Legend */}
+      <div className="flex flex-wrap items-center justify-between gap-2 px-1 font-mono text-[11px] text-[var(--color-ink-muted)]">
+        <div className="flex flex-wrap items-center gap-4">
+          <span className="inline-flex items-center gap-1.5">
+            <span className="h-2.5 w-2.5 rounded-full bg-[var(--color-accent)]" />
+            <span>Tónica (raíz)</span>
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <span className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-[var(--color-ink)] text-[9px] font-bold text-white">
+              1
+            </span>
+            <span>Números = dedos</span>
+          </span>
+        </div>
+        <span>Pulsa una cuerda en el diagrama para oírla</span>
       </div>
 
       {/* Inline Replacement Options Tray */}

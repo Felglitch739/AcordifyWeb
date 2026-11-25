@@ -1,6 +1,6 @@
 import { defineConfig, loadEnv, type Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
-import { POST as inspirationPost } from './api/inspiration.js';
+import { GET as inspirationGet, POST as inspirationPost } from './api/inspiration.js';
 
 function localApiDevPlugin(): Plugin {
   return {
@@ -15,6 +15,16 @@ function localApiDevPlugin(): Plugin {
       }
 
       server.middlewares.use('/api/inspiration', async (req, res, next) => {
+        if (req.method === 'GET') {
+          const webRes = await inspirationGet();
+          res.statusCode = webRes.status;
+          webRes.headers.forEach((value, key) => {
+            res.setHeader(key, value);
+          });
+          res.end(await webRes.text());
+          return;
+        }
+
         if (req.method !== 'POST') {
           next();
           return;

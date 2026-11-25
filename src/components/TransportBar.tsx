@@ -81,8 +81,11 @@ export const TransportBar: React.FC<TransportBarProps> = ({
   };
 
   return (
-    <div className="sticky bottom-3 sm:bottom-4 z-30 w-full">
-      <div className="surface-card bg-white/92 backdrop-blur-md p-3.5 sm:p-4 shadow-[0_12px_32px_-14px_rgba(17,17,17,0.16)]">
+    <div className="md:sticky md:top-[72px] z-20 w-full">
+      <div
+        data-transport-bar="true"
+        className="surface-card bg-white/94 backdrop-blur-md p-3 sm:px-4 sm:py-3 shadow-[0_12px_32px_-14px_rgba(17,17,17,0.16)]"
+      >
         {/* Inline Save Form cleanly inside bar */}
         <AnimatePresence initial={false}>
           {isSavingInline && (
@@ -204,7 +207,7 @@ export const TransportBar: React.FC<TransportBarProps> = ({
                 value={bpm}
                 onChange={(e) => onChangeBpm(Number(e.target.value))}
                 aria-label="Tempo en BPM"
-                className="studio-slider w-16 sm:w-20"
+                className="studio-slider w-28 sm:w-32"
               />
               <button
                 type="button"
@@ -234,7 +237,7 @@ export const TransportBar: React.FC<TransportBarProps> = ({
               type="button"
               onClick={onToggleMetronome}
               aria-pressed={metronomeEnabled}
-              className={`rounded-full border px-3 py-2 text-xs font-medium inline-flex items-center gap-1.5 transition-colors duration-150 cursor-pointer whitespace-nowrap ${
+              className={`rounded-full border px-2.5 sm:px-3 py-1.5 text-xs font-medium inline-flex items-center gap-1.5 transition-colors duration-150 cursor-pointer whitespace-nowrap ${
                 metronomeEnabled
                   ? 'border-[var(--color-ink)] bg-[var(--color-ink)] text-white'
                   : 'border-[var(--color-border)] bg-transparent text-[var(--color-ink)] hover:border-[var(--color-ink-muted)] hover:bg-[var(--color-surface-subtle)]'
@@ -248,7 +251,7 @@ export const TransportBar: React.FC<TransportBarProps> = ({
               type="button"
               onClick={onToggleCountIn}
               aria-pressed={countInEnabled}
-              className={`rounded-full border px-3 py-2 text-xs font-medium inline-flex items-center gap-1.5 transition-colors duration-150 cursor-pointer whitespace-nowrap ${
+              className={`rounded-full border px-2.5 sm:px-3 py-1.5 text-xs font-medium inline-flex items-center gap-1.5 transition-colors duration-150 cursor-pointer whitespace-nowrap ${
                 countInEnabled
                   ? 'border-[var(--color-ink)] bg-[var(--color-ink)] text-white'
                   : 'border-[var(--color-border)] bg-transparent text-[var(--color-ink)] hover:border-[var(--color-ink-muted)] hover:bg-[var(--color-surface-subtle)]'
@@ -261,7 +264,7 @@ export const TransportBar: React.FC<TransportBarProps> = ({
             <button
               type="button"
               onClick={onShare}
-              className="btn-secondary px-3 py-2 text-xs whitespace-nowrap"
+              className="btn-secondary px-2.5 sm:px-3 py-1.5 text-xs whitespace-nowrap"
             >
               <Link2 className="w-3.5 h-3.5" />
               <span>Compartir</span>
@@ -271,10 +274,10 @@ export const TransportBar: React.FC<TransportBarProps> = ({
               <button
                 type="button"
                 onClick={openSavePrompt}
-                className="btn-secondary px-3.5 py-2 text-xs whitespace-nowrap border-[var(--color-ink)]"
+                className="btn-secondary px-3 py-1.5 text-xs whitespace-nowrap border-[var(--color-ink)]"
               >
                 <BookmarkPlus className="w-3.5 h-3.5" />
-                <span>Guardar</span>
+                <span>Guardar en libreta</span>
               </button>
             )}
           </div>

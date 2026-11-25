@@ -528,11 +528,11 @@ function App() {
             <button
               type="button"
               onClick={() => setSavedOpen(true)}
-              className="btn-secondary bg-[var(--color-surface)] px-2 sm:px-3.5 py-1 sm:py-1.5 text-[11px] sm:text-xs whitespace-nowrap"
+              className="btn-secondary overflow-visible shrink-0 bg-[var(--color-surface)] gap-1.5 px-2.5 sm:px-3.5 py-1 sm:py-1.5 text-[11px] sm:text-xs whitespace-nowrap"
             >
-              <BookMarked className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
+              <BookMarked className="w-3 h-3 sm:w-3.5 sm:h-3.5 shrink-0" />
               <span>Libreta</span>
-              <span className="rounded-full bg-[var(--color-surface-subtle)] px-1 sm:px-1.5 py-0.5 font-mono text-[10px] sm:text-[11px] text-[var(--color-ink)] num-tabular leading-none">
+              <span className="min-w-[20px] text-center rounded-full bg-[var(--color-surface-subtle)] px-1.5 py-0.5 font-mono text-[10px] sm:text-[11px] text-[var(--color-ink)] num-tabular leading-none">
                 {savedItems.length}
               </span>
             </button>
@@ -615,17 +615,6 @@ function App() {
                 onChangeStrumPattern={setStrumPattern}
               />
 
-              <ProgressionStrip
-                progression={progression}
-                activeChordIndex={player.activeChordIndex}
-                activeBeat={player.activeBeat}
-                editingSlotIndex={editingSlotIndex}
-                onToggleEditSlot={handleToggleEditSlot}
-                onReplaceChord={handleReplaceChord}
-                onPreviewChord={(symbol) => void player.previewChord(symbol)}
-                onPluckNote={(noteName) => void player.previewNote(noteName)}
-              />
-
               <TransportBar
                 isPlaying={player.isPlaying}
                 bpm={bpm}
@@ -640,6 +629,17 @@ function App() {
                 onToggleCountIn={() => setCountInEnabled((v) => !v)}
                 onShare={() => void handleShare()}
                 onSave={(name) => void handleSave(name)}
+              />
+
+              <ProgressionStrip
+                progression={progression}
+                activeChordIndex={player.activeChordIndex}
+                activeBeat={player.activeBeat}
+                editingSlotIndex={editingSlotIndex}
+                onToggleEditSlot={handleToggleEditSlot}
+                onReplaceChord={handleReplaceChord}
+                onPreviewChord={(symbol) => void player.previewChord(symbol)}
+                onPluckNote={(noteName) => void player.previewNote(noteName)}
               />
 
               <AiInspirationPanel
@@ -700,11 +700,13 @@ function App() {
       <SavedProgressionsDrawer
         isOpen={savedOpen}
         items={savedItems}
+        defaultSaveName={defaultSaveName}
         storageMode={isCloudMode ? 'cloud' : 'local'}
         isAuthConfigured={isNeonAuthConfigured}
         authUser={authUser}
         onOpenAuth={() => setAuthModalOpen(true)}
         onSignOut={() => void handleSignOut()}
+        onQuickSave={(name) => void handleSave(name)}
         onClose={() => setSavedOpen(false)}
         onLoad={handleLoadSaved}
         onDelete={(id) => void handleDeleteSaved(id)}

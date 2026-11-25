@@ -568,9 +568,9 @@ export const TunerPanel: React.FC<TunerPanelProps> = ({
           : 'Un poco alta — afloja la clavija';
 
   const needleColor = !hasLiveReading
-    ? '#52525B'
+    ? '#71717A'
     : isInTune
-      ? '#22C55E'
+      ? '#15803D'
       : '#E85D3D';
 
   const fullArcPath = describeArc(-MAX_ARC_DEG, MAX_ARC_DEG, RADIUS);
@@ -1009,21 +1009,21 @@ export const TunerPanel: React.FC<TunerPanelProps> = ({
               )}
             </AnimatePresence>
 
-            {/* Matte Obsidian OLED Precision Viewport */}
-            <div className="mt-4 rounded-[14px] border border-[#27272A] bg-[#111111] p-4 sm:p-5 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
+            {/* Light Studio Porcelain Precision Viewport (AAA Contrast) */}
+            <div className="mt-4 rounded-[14px] border border-[#D4D4D8] bg-[#FAFAFA] p-4 sm:p-5 text-[#111111]">
               {/* Top Telemetry Strip */}
               <div className="flex flex-wrap items-center justify-between gap-2 text-xs font-mono">
-                <span className="text-white/70">
+                <span className="text-[#52525B]">
                   {activeReferenceString.spanishName} · obj. {activeReferenceString.frequency} Hz
                 </span>
                 <div className="flex items-center gap-2.5">
                   <span
-                    className={`rounded-full px-2 py-0.5 text-[11px] num-tabular ${
+                    className={`rounded-full px-2.5 py-0.5 text-[11px] font-medium num-tabular ${
                       !hasLiveReading
-                        ? 'bg-white/10 text-white/55'
+                        ? 'bg-[#ECECEF] text-[#111111]'
                         : isInTune
-                          ? 'bg-[#22C55E]/20 text-[#4ADE80]'
-                          : 'bg-[#E85D3D]/20 text-[#FB923C]'
+                          ? 'bg-[#15803D]/15 text-[#15803D]'
+                          : 'bg-[#E85D3D]/15 text-[#C2410C]'
                     }`}
                   >
                     {hasLiveReading
@@ -1044,9 +1044,9 @@ export const TunerPanel: React.FC<TunerPanelProps> = ({
                             height: `${4 + bar * 2}px`,
                             backgroundColor: lit
                               ? isInTune
-                                ? '#22C55E'
-                                : '#FFFFFF'
-                              : '#27272A',
+                                ? '#15803D'
+                                : '#111111'
+                              : '#E4E4E7',
                           }}
                         />
                       );
@@ -1061,16 +1061,16 @@ export const TunerPanel: React.FC<TunerPanelProps> = ({
                   <path
                     d={fullArcPath}
                     fill="none"
-                    stroke="#27272A"
-                    strokeWidth="6"
+                    stroke="#E4E4E7"
+                    strokeWidth="6.5"
                     strokeLinecap="round"
                   />
 
                   <path
                     d={sweetSpotArcPath}
                     fill="none"
-                    stroke={isInTune ? '#22C55E' : '#3F3F46'}
-                    strokeWidth="7.5"
+                    stroke={isInTune ? '#15803D' : '#A1A1AA'}
+                    strokeWidth="8"
                     strokeLinecap="round"
                   />
 
@@ -1079,9 +1079,9 @@ export const TunerPanel: React.FC<TunerPanelProps> = ({
                       cx={CX}
                       cy={CY - RADIUS}
                       r="11"
-                      fill="rgba(34, 197, 94, 0.16)"
-                      stroke="#22C55E"
-                      strokeWidth="1.4"
+                      fill="rgba(21, 128, 61, 0.14)"
+                      stroke="#15803D"
+                      strokeWidth="1.5"
                     />
                   )}
 
@@ -1103,12 +1103,12 @@ export const TunerPanel: React.FC<TunerPanelProps> = ({
                         y2={outer.y}
                         stroke={
                           isZero && hasLiveReading
-                            ? '#22C55E'
+                            ? '#15803D'
                             : isMajor
-                              ? '#71717A'
-                              : '#3F3F46'
+                              ? '#52525B'
+                              : '#A1A1AA'
                         }
-                        strokeWidth={isZero ? 2.2 : isMajor ? 1.3 : 0.9}
+                        strokeWidth={isZero ? 2.2 : isMajor ? 1.4 : 1}
                         strokeLinecap="round"
                       />
                     );
@@ -1117,8 +1117,8 @@ export const TunerPanel: React.FC<TunerPanelProps> = ({
                   <text
                     x="30"
                     y="88"
-                    fill="#71717A"
-                    className="font-mono text-[10px]"
+                    fill="#52525B"
+                    className="font-mono text-[10px] font-medium"
                     textAnchor="middle"
                   >
                     -50
@@ -1126,8 +1126,8 @@ export const TunerPanel: React.FC<TunerPanelProps> = ({
                   <text
                     x={CX}
                     y="13"
-                    fill={hasLiveReading ? '#4ADE80' : '#A1A1AA'}
-                    className="font-mono text-[10px] font-medium"
+                    fill={hasLiveReading ? '#15803D' : '#111111'}
+                    className="font-mono text-[10px] font-semibold"
                     textAnchor="middle"
                   >
                     0
@@ -1135,8 +1135,8 @@ export const TunerPanel: React.FC<TunerPanelProps> = ({
                   <text
                     x="270"
                     y="88"
-                    fill="#71717A"
-                    className="font-mono text-[10px]"
+                    fill="#52525B"
+                    className="font-mono text-[10px] font-medium"
                     textAnchor="middle"
                   >
                     +50
@@ -1146,8 +1146,8 @@ export const TunerPanel: React.FC<TunerPanelProps> = ({
                   <text
                     x="36"
                     y="144"
-                    fill={hasLiveReading && reading.status === 'flat' ? '#E85D3D' : '#52525B'}
-                    className="font-mono text-[10px] font-medium"
+                    fill={hasLiveReading && reading.status === 'flat' ? '#C2410C' : '#52525B'}
+                    className="font-mono text-[10px] font-semibold"
                     textAnchor="start"
                   >
                     ◀ Apretar
@@ -1155,8 +1155,8 @@ export const TunerPanel: React.FC<TunerPanelProps> = ({
                   <text
                     x="264"
                     y="144"
-                    fill={hasLiveReading && reading.status === 'sharp' ? '#E85D3D' : '#52525B'}
-                    className="font-mono text-[10px] font-medium"
+                    fill={hasLiveReading && reading.status === 'sharp' ? '#C2410C' : '#52525B'}
+                    className="font-mono text-[10px] font-semibold"
                     textAnchor="end"
                   >
                     Aflojar ▶
@@ -1167,7 +1167,7 @@ export const TunerPanel: React.FC<TunerPanelProps> = ({
                     initial={false}
                     animate={{
                       rotate: needleDeg,
-                      opacity: hasLiveReading ? 1 : 0.35,
+                      opacity: hasLiveReading ? 1 : 0.65,
                     }}
                     transition={{ type: 'spring', stiffness: 260, damping: 26, mass: 0.6 }}
                     style={{ transformOrigin: `${CX}px ${CY}px` }}
@@ -1188,7 +1188,7 @@ export const TunerPanel: React.FC<TunerPanelProps> = ({
                     cx={CX}
                     cy={CY}
                     r="6.5"
-                    fill="#18181B"
+                    fill="#FFFFFF"
                     stroke={needleColor}
                     strokeWidth="2.5"
                   />
@@ -1201,18 +1201,18 @@ export const TunerPanel: React.FC<TunerPanelProps> = ({
                   className="font-mono text-5xl sm:text-6xl font-medium num-tabular transition-colors"
                   style={{
                     color: !hasLiveReading
-                      ? 'rgba(255, 255, 255, 0.45)'
+                      ? '#52525B'
                       : isInTune
-                        ? '#4ADE80'
-                        : '#FFFFFF',
+                        ? '#15803D'
+                        : '#111111',
                   }}
                 >
                   {hasLiveReading ? reading.detectedNote : activeReferenceString.label}
-                  <sup className="text-xl sm:text-2xl ml-0.5 opacity-75">
+                  <sup className="text-xl sm:text-2xl ml-0.5 opacity-80">
                     {hasLiveReading ? reading.detectedOctave : activeReferenceString.octave}
                   </sup>
                 </span>
-                <span className="font-mono text-sm text-white/60 num-tabular">
+                <span className="font-mono text-sm text-[#52525B] num-tabular">
                   {hasLiveReading
                     ? `${reading.frequency.toFixed(1)} Hz`
                     : `${activeReferenceString.frequency} Hz`}
@@ -1237,12 +1237,12 @@ export const TunerPanel: React.FC<TunerPanelProps> = ({
                       className="h-1.5 rounded-full transition-colors duration-75"
                       style={{
                         backgroundColor: litGreen
-                          ? '#22C55E'
+                          ? '#15803D'
                           : activeSide
                             ? '#E85D3D'
                             : isZero
-                              ? '#3F3F46'
-                              : '#27272A',
+                              ? '#A1A1AA'
+                              : '#E4E4E7',
                       }}
                     />
                   );
@@ -1254,10 +1254,10 @@ export const TunerPanel: React.FC<TunerPanelProps> = ({
                 className="mt-3 text-center text-sm font-medium"
                 style={{
                   color: !hasLiveReading
-                    ? '#A1A1AA'
+                    ? '#3F3F46'
                     : isInTune
-                      ? '#4ADE80'
-                      : '#FB923C',
+                      ? '#15803D'
+                      : '#C2410C',
                 }}
               >
                 {statusText}

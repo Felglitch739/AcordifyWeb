@@ -3,6 +3,8 @@ import type { BarreSpec } from '../data/chords';
 
 interface FretboardProps {
   frets: readonly number[]; // -1 for X, 0 for O, > 0 for fret number
+  fingers?: readonly number[]; // 0 = open/muted, 1..4 = finger number
+  rootStrings?: readonly number[]; // indices 0..5 (6th..1st string) sounding the chord root
   startFret?: number;
   barre?: BarreSpec;
   isActive?: boolean;
@@ -20,9 +22,12 @@ const STRING_COLORS = [
 ] as const;
 
 const STRING_WIDTHS = [2.1, 1.8, 1.5, 1.2, 0.95, 0.78] as const;
+const STRING_NAMES = ['E', 'A', 'D', 'G', 'B', 'e'] as const;
 
 export const Fretboard: React.FC<FretboardProps> = ({
   frets,
+  fingers,
+  rootStrings,
   startFret = 1,
   barre,
   isActive = false,
@@ -48,12 +53,11 @@ export const Fretboard: React.FC<FretboardProps> = ({
     startFret === 1 || startFret === 5 || startFret === 7 || startFret === 9;
   const showDoubleInlay = startFret === 12;
 
-  const dotFill = isActive ? 'var(--color-accent)' : 'var(--color-ink)';
-  const openCircleStroke = isActive ? 'var(--color-accent)' : 'var(--color-ink)';
+  const rootSet = new Set(rootStrings ?? []);
 
   return (
-    <div className="flex flex-col items-center select-none w-full max-w-[158px]">
-      <svg viewBox="-18 0 120 134" className="w-full h-auto overflow-visible">
+    <div className="flex flex-col items-center select-none w-full max-w-[206px]">
+      <svg viewBox="-22 -2 132 152" className="w-full h-auto overflow-visible">
         <rect
           id={boardId}
           x="8"
@@ -62,18 +66,18 @@ export const Fretboard: React.FC<FretboardProps> = ({
           height="102"
           rx="4"
           fill="#FAFAFA"
-          stroke="#D4D4D8"
+          stroke={isActive ? 'var(--color-accent-border)' : '#D4D4D8'}
           strokeWidth="1"
         />
 
         {/* Inlay Dots */}
         {showSingleInlay && (
-          <circle cx="50" cy="82.5" r="2.6" fill="#E4E4E7" />
+          <circle cx="50" cy="82.5" r="2.8" fill="#E4E4E7" />
         )}
         {showDoubleInlay && (
           <>
-            <circle cx="34.8" cy="57.5" r="2.3" fill="#E4E4E7" />
-            <circle cx="65.2" cy="57.5" r="2.3" fill="#E4E4E7" />
+            <circle cx="34.8" cy="57.5" r="2.5" fill="#E4E4E7" />
+            <circle cx="65.2" cy="57.5" r="2.5" fill="#E4E4E7" />
           </>
         )}
 
@@ -88,7 +92,7 @@ export const Fretboard: React.FC<FretboardProps> = ({
               x2="90.5"
               y2={y}
               stroke={isNut ? '#111111' : '#D4D4D8'}
-              strokeWidth={isNut ? 4 : 1.3}
+              strokeWidth={isNut ? 4.2 : 1.3}
               strokeLinecap="round"
             />
           );
@@ -134,7 +138,7 @@ export const Fretboard: React.FC<FretboardProps> = ({
                     onPluckString(i);
                   }}
                 >
-                  <title>{`Tocar cuerda ${6 - i}`}</title>
+                  <title>{`Tocar cuerda ${6 - i} (${STRING_NAMES[i]})`}</title>
                 </line>
               )}
             </g>
@@ -152,21 +156,64 @@ export const Fretboard: React.FC<FretboardProps> = ({
           {startFret}fr
         </text>
 
-        {/* Barre Indicator */}
+        {/* Barre Indicator + Root highlights along barre */}
         {showBarre && barre && relativeBarreFret !== null && (
-          <rect
-            x={stringsX[barre.fromString] - 5.5}
-            y={fretsY[relativeBarreFret - 1] + 12.5 - 5.5}
-            width={stringsX[barre.toString] - stringsX[barre.fromString] + 11}
-            height={11}
-            rx={5.5}
-            fill={dotFill}
-          />
+          <g className="pointer-events-none">
+            <rect
+              x={stringsX[barre.fromString] - 7.2}
+              y={fretsY[relativeBarreFret - 1] + 12.5 - 7.2}
+              width={stringsX[barre.toString] - stringsX[barre.fromString] + 14.4}
+              height={14.4}
+              rx={7.2}
+              fill="#111111"
+            />
+            {Array.from(
+              { length: barre.toString - barre.fromString + 1 },
+              (_, offset) => barre.fromString + offset,
+            ).map((strIdx) => {
+              const isRoot = rootSet.has(strIdx);
+              if (isRoot) {
+                const cy = fretsY[relativeBarreFret - 1] + 12.5;
+                return (
+                  <g key={`barre-root-${strIdx}`}>
+                    <circle cx={stringsX[strIdx]} cy={cy} r="7.2" fill="#E85D3D" />
+                    <text
+                      x={stringsX[strIdx]}
+                      y={cy + 3}
+                      textAnchor="middle"
+                      fill="#FFFFFF"
+                      className="font-mono text-[8.5px] font-bold"
+                    >
+                      1
+                    </text>
+                  </g>
+                );
+              }
+              if (strIdx === barre.fromString) {
+                const cy = fretsY[relativeBarreFret - 1] + 12.5;
+                return (
+                  <text
+                    key={`barre-finger-${strIdx}`}
+                    x={stringsX[strIdx]}
+                    y={cy + 3}
+                    textAnchor="middle"
+                    fill="#FFFFFF"
+                    className="font-mono text-[8.5px] font-bold"
+                  >
+                    1
+                  </text>
+                );
+              }
+              return null;
+            })}
+          </g>
         )}
 
         {/* String Markers */}
         {frets.map((fret, i) => {
           const x = stringsX[i];
+          const isRoot = rootSet.has(i);
+          const fingerNum = fingers?.[i] ?? 0;
 
           if (fret === -1) {
             return (
@@ -189,10 +236,10 @@ export const Fretboard: React.FC<FretboardProps> = ({
                 key={`marker-${i}`}
                 cx={x}
                 cy="10"
-                r="3.5"
-                stroke={openCircleStroke}
-                fill="transparent"
-                strokeWidth="1.65"
+                r="4.2"
+                stroke={isRoot ? '#E85D3D' : '#111111'}
+                fill={isRoot ? 'rgba(232, 93, 61, 0.14)' : 'transparent'}
+                strokeWidth={isRoot ? 2.2 : 1.7}
               />
             );
           }
@@ -211,18 +258,46 @@ export const Fretboard: React.FC<FretboardProps> = ({
           if (relativeFret >= 1 && relativeFret <= 4) {
             const cy = fretsY[relativeFret - 1] + 12.5;
             return (
-              <circle
-                key={`marker-${i}`}
-                cx={x}
-                cy={cy}
-                r="5"
-                fill={dotFill}
-                className="pointer-events-none"
-              />
+              <g key={`marker-${i}`} className="pointer-events-none">
+                <circle
+                  cx={x}
+                  cy={cy}
+                  r="7.4"
+                  fill={isRoot ? '#E85D3D' : '#111111'}
+                />
+                {fingerNum > 0 && (
+                  <text
+                    x={x}
+                    y={cy + 3}
+                    textAnchor="middle"
+                    fill="#FFFFFF"
+                    className="font-mono text-[8.5px] font-bold"
+                  >
+                    {fingerNum}
+                  </text>
+                )}
+              </g>
             );
           }
 
           return null;
+        })}
+
+        {/* String Names E A D G B e */}
+        {stringsX.map((x, i) => {
+          const isPlayed = frets[i] >= 0;
+          return (
+            <text
+              key={`str-label-${i}`}
+              x={x}
+              y="138"
+              textAnchor="middle"
+              fill={isPlayed ? '#52525B' : '#A1A1AA'}
+              className="font-mono text-[9.5px] font-medium"
+            >
+              {STRING_NAMES[i]}
+            </text>
+          );
         })}
       </svg>
     </div>

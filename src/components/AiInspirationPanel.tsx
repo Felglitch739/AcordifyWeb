@@ -1,8 +1,12 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { Check, Copy, Feather, Sparkles } from 'lucide-react';
 import type { StrumPatternId } from '../audio';
-import { requestInspiration, type InspirationResponse } from '../lib/geminiClient';
+import {
+  fetchInspirationStatus,
+  requestInspiration,
+  type InspirationResponse,
+} from '../lib/geminiClient';
 import type { Mode, MoodId } from '../theory';
 
 interface AiInspirationPanelProps {
@@ -25,9 +29,22 @@ export const AiInspirationPanel: React.FC<AiInspirationPanelProps> = ({
   strumPattern,
 }) => {
   const [theme, setTheme] = useState('');
+  const [aiConfigured, setAiConfigured] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [copied, setCopied] = useState(false);
   const [result, setResult] = useState<InspirationResponse | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void fetchInspirationStatus().then((status) => {
+      if (!cancelled) {
+        setAiConfigured(status.aiConfigured);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const handleGenerate = async () => {
     setIsLoading(true);
@@ -72,13 +89,15 @@ export const AiInspirationPanel: React.FC<AiInspirationPanelProps> = ({
           </div>
           <div>
             <p className="font-mono text-xs uppercase tracking-[0.14em] text-[var(--color-ink-muted)]">
-              Extra opcional
+              {aiConfigured ? 'Extra opcional · IA conectada' : 'Práctica local · Sin IA conectada'}
             </p>
             <h2 className="text-2xl font-medium text-[var(--color-ink)] mt-0.5">
-              Letra y rasgueo
+              {aiConfigured ? 'Letra y rasgueo' : 'Sugerencia de rasgueo'}
             </h2>
             <p className="text-sm text-[var(--color-ink-secondary)] mt-1">
-              Te sugiero una letra corta para esta vuelta, con tus acordes.
+              {aiConfigured
+                ? 'Te sugiero una letra corta para esta vuelta, con tus acordes.'
+                : 'Sugerencia local de rasgueo para esta vuelta. Agrega GEMINI_API_KEY en Vercel para activar versos con IA.'}
             </p>
           </div>
         </div>
@@ -90,26 +109,36 @@ export const AiInspirationPanel: React.FC<AiInspirationPanelProps> = ({
           className="btn-primary self-start sm:self-auto shrink-0 px-4 py-2.5 text-xs"
         >
           <Sparkles className="w-3.5 h-3.5" />
-          <span>{isLoading ? 'Escribiendo idea...' : 'Sugerir verso y tip'}</span>
+          <span>
+            {isLoading
+              ? aiConfigured
+                ? 'Escribiendo idea...'
+                : 'Generando tip...'
+              : aiConfigured
+                ? 'Sugerir verso y tip'
+                : 'Sugerir tip de rasgueo'}
+          </span>
         </button>
       </div>
 
-      <div>
-        <label
-          htmlFor="ai-theme-input"
-          className="block text-xs font-medium text-[var(--color-ink-secondary)] mb-1.5"
-        >
-          Tema opcional (ej. lluvia en la ventana, café de mañana, volver a empezar)
-        </label>
-        <input
-          id="ai-theme-input"
-          type="text"
-          value={theme}
-          onChange={(e) => setTheme(e.target.value)}
-          placeholder="Escribe una idea o déjalo vacío"
-          className="w-full rounded-[12px] border border-[var(--color-border)] bg-[var(--color-surface-board)] px-3.5 py-2.5 text-sm text-[var(--color-ink)] placeholder:text-[var(--color-ink-muted)] focus:border-[var(--color-ink)] focus:outline-none"
-        />
-      </div>
+      {aiConfigured && (
+        <div>
+          <label
+            htmlFor="ai-theme-input"
+            className="block text-xs font-medium text-[var(--color-ink-secondary)] mb-1.5"
+          >
+            Tema opcional (ej. lluvia en la ventana, café de mañana, volver a empezar)
+          </label>
+          <input
+            id="ai-theme-input"
+            type="text"
+            value={theme}
+            onChange={(e) => setTheme(e.target.value)}
+            placeholder="Escribe una idea o déjalo vacío"
+            className="w-full rounded-[12px] border border-[var(--color-border)] bg-[var(--color-surface-board)] px-3.5 py-2.5 text-sm text-[var(--color-ink)] placeholder:text-[var(--color-ink-muted)] focus:border-[var(--color-ink)] focus:outline-none"
+          />
+        </div>
+      )}
 
       <AnimatePresence mode="wait">
         {result && (
