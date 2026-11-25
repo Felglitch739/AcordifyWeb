@@ -257,6 +257,75 @@ describe('Gemini proxy & client graceful fallback', () => {
     expect(String(data.lyrics)).toContain('[C]');
   });
 
+  it('retries the next ranked ListModels candidate on HTTP 503 and caches only the working model', async () => {
+    process.env.GEMINI_API_KEY = 'fake-test-gemini-key';
+    delete process.env.GEMINI_MODEL;
+
+    const fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(new Response('Overloaded', { status: 503 }))
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            models: [
+              {
+                name: 'models/gemini-3.6-flash',
+                supportedGenerationMethods: ['generateContent'],
+              },
+              {
+                name: 'models/gemini-3.8-flash',
+                supportedGenerationMethods: ['generateContent'],
+              },
+            ],
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        ),
+      )
+      .mockResolvedValueOnce(new Response('Still overloaded', { status: 503 }))
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            candidates: [
+              {
+                content: {
+                  parts: [
+                    {
+                      text: JSON.stringify({
+                        title: 'Luz de tarde',
+                        lyrics: '[C]Vuelve el eco\n[Am]en la madera\n[F]todo calmo\n[G]y la espera',
+                        strumTip: 'Mantén un rasgueo constante en corcheas suaves.',
+                      }),
+                    },
+                  ],
+                },
+              },
+            ],
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        ),
+      );
+
+    const req = new Request('http://localhost/api/inspiration', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(SAMPLE_PAYLOAD),
+    });
+
+    const res = await POST(req);
+    expect(res.status).toBe(200);
+    const data = (await res.json()) as Record<string, unknown>;
+
+    expect(fetchSpy).toHaveBeenCalledTimes(4);
+    expect(String(fetchSpy.mock.calls[2][0])).toContain('gemini-3.8-flash:generateContent');
+    expect(String(fetchSpy.mock.calls[3][0])).toContain('gemini-3.6-flash:generateContent');
+    expect(data.source).toBe('gemini');
+    expect(data.model).toBe('gemini-3.6-flash');
+
+    const statusRes = await GET();
+    const statusJson = (await statusRes.json()) as { model: string };
+    expect(statusJson.model).toBe('gemini-3.6-flash');
+  });
+
   it('requestInspiration client returns local fallback cleanly on network errors', async () => {
     vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('offline'));
 

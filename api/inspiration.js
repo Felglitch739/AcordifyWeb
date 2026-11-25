@@ -13,8 +13,9 @@ const LOCAL_FALLBACK_NOTICE =
  *   theme?: string;
  * }} input
  * @param {string} [fallbackReason='unavailable']
+ * @param {string[]} [attemptedModels]
  */
-function buildLocalStrumFallback(input, fallbackReason = 'unavailable') {
+function buildLocalStrumFallback(input, fallbackReason = 'unavailable', attemptedModels) {
   const c0 = input.chords[0] ?? input.keyRoot;
   const c1 = input.chords[1] ?? c0;
   const c2 = input.chords[2] ?? c0;
@@ -38,6 +39,7 @@ function buildLocalStrumFallback(input, fallbackReason = 'unavailable') {
     strumTip,
     notice: LOCAL_FALLBACK_NOTICE,
     fallbackReason,
+    ...(Array.isArray(attemptedModels) && attemptedModels.length > 0 ? { attemptedModels } : {}),
   };
 }
 
@@ -210,16 +212,16 @@ async function callGeminiGenerateContent(apiKey, model, input) {
         ...(isFlash25 ? { thinkingConfig: { thinkingBudget: 0 } } : {}),
       },
     }),
-    signal: AbortSignal.timeout(9000),
+    signal: AbortSignal.timeout(5500),
   });
 }
 
 /**
  * @param {string} apiKey
- * @param {string} failedModel
- * @returns {Promise<string | null>}
+ * @param {Set<string>} excludeSet
+ * @returns {Promise<string[]>}
  */
-async function discoverFallbackGeminiModel(apiKey, failedModel) {
+async function discoverFallbackGeminiModels(apiKey, excludeSet) {
   try {
     const res = await fetch(
       'https://generativelanguage.googleapis.com/v1beta/models?pageSize=100',
@@ -228,7 +230,7 @@ async function discoverFallbackGeminiModel(apiKey, failedModel) {
         signal: AbortSignal.timeout(4000),
       },
     );
-    if (!res.ok) return null;
+    if (!res.ok) return [];
 
     const payload = await res.json();
     const models = Array.isArray(payload?.models) ? payload.models : [];
@@ -244,7 +246,7 @@ async function discoverFallbackGeminiModel(apiKey, failedModel) {
       }
       if (typeof m.name !== 'string') continue;
       const id = normalizeModelId(m.name);
-      if (!/^gemini-/i.test(id) || id === failedModel) continue;
+      if (!/^gemini-/i.test(id) || excludeSet.has(id)) continue;
       if (/embedding|imagen|veo|tts|audio|robotics|computer-use|aqa|vision|thinking|learnlm/i.test(id)) {
         continue;
       }
@@ -260,9 +262,9 @@ async function discoverFallbackGeminiModel(apiKey, failedModel) {
     }
 
     candidates.sort((a, b) => b.score - a.score);
-    return candidates[0]?.id ?? null;
+    return candidates.slice(0, 3).map((c) => c.id);
   } catch {
-    return null;
+    return [];
   }
 }
 
@@ -304,60 +306,82 @@ export async function POST(request) {
 
   const envModel = process.env.GEMINI_MODEL?.trim();
   const configuredModel = normalizeModelId(envModel || 'gemini-2.5-flash');
-  let activeModel = envModel ? configuredModel : cachedResolvedModel || configuredModel;
+  const initialModel = envModel ? configuredModel : cachedResolvedModel || configuredModel;
+
+  const tried = new Set();
+  const attemptedModels = [];
+  const queue = [initialModel];
+  let discoveredOnce = false;
+  let lastReason = 'unavailable';
 
   try {
-    let geminiRes = await callGeminiGenerateContent(apiKey, activeModel, input);
+    while (queue.length > 0 && attemptedModels.length < 3) {
+      const model = queue.shift();
+      if (!model || tried.has(model)) continue;
 
-    if (geminiRes.status === 404) {
-      const discovered = await discoverFallbackGeminiModel(apiKey, activeModel);
-      if (!discovered) {
-        return jsonResponse(buildLocalStrumFallback(input, 'http_404_no_models'), 200);
+      tried.add(model);
+      attemptedModels.push(model);
+
+      const geminiRes = await callGeminiGenerateContent(apiKey, model, input);
+
+      if (geminiRes.ok) {
+        const payload = await geminiRes.json();
+        const parsed = extractGeminiJsonText(payload);
+
+        const title = typeof parsed?.title === 'string' ? parsed.title.trim() : '';
+        const lyrics = Array.isArray(parsed?.lyrics)
+          ? parsed.lyrics
+              .filter((line) => typeof line === 'string')
+              .map((line) => line.trim())
+              .filter(Boolean)
+              .join('\n')
+          : typeof parsed?.lyrics === 'string'
+            ? parsed.lyrics.trim()
+            : '';
+        const strumTip = typeof parsed?.strumTip === 'string' ? parsed.strumTip.trim() : '';
+
+        if (!title || !lyrics || !strumTip) {
+          lastReason = 'missing_fields';
+          break;
+        }
+
+        cachedResolvedModel = model;
+
+        return jsonResponse(
+          {
+            source: 'gemini',
+            model,
+            title,
+            lyrics,
+            strumTip,
+            notice: null,
+          },
+          200,
+        );
       }
-      activeModel = discovered;
-      cachedResolvedModel = discovered;
-      geminiRes = await callGeminiGenerateContent(apiKey, activeModel, input);
+
+      lastReason = `http_${geminiRes.status}`;
+      const isRetryableStatus = [404, 429, 503].includes(geminiRes.status);
+      if (isRetryableStatus && !discoveredOnce) {
+        discoveredOnce = true;
+        const candidates = await discoverFallbackGeminiModels(apiKey, tried);
+        if (candidates.length === 0 && geminiRes.status === 404) {
+          lastReason = 'http_404_no_models';
+        }
+        queue.push(...candidates);
+      }
+
+      if (!isRetryableStatus) {
+        break;
+      }
     }
 
-    if (!geminiRes.ok) {
-      return jsonResponse(buildLocalStrumFallback(input, `http_${geminiRes.status}`), 200);
-    }
-
-    const payload = await geminiRes.json();
-    const parsed = extractGeminiJsonText(payload);
-
-    const title = typeof parsed?.title === 'string' ? parsed.title.trim() : '';
-    const lyrics = Array.isArray(parsed?.lyrics)
-      ? parsed.lyrics
-          .filter((line) => typeof line === 'string')
-          .map((line) => line.trim())
-          .filter(Boolean)
-          .join('\n')
-      : typeof parsed?.lyrics === 'string'
-        ? parsed.lyrics.trim()
-        : '';
-    const strumTip = typeof parsed?.strumTip === 'string' ? parsed.strumTip.trim() : '';
-
-    if (!title || !lyrics || !strumTip) {
-      return jsonResponse(buildLocalStrumFallback(input, 'missing_fields'), 200);
-    }
-
-    return jsonResponse(
-      {
-        source: 'gemini',
-        model: activeModel,
-        title,
-        lyrics,
-        strumTip,
-        notice: null,
-      },
-      200,
-    );
+    return jsonResponse(buildLocalStrumFallback(input, lastReason, attemptedModels), 200);
   } catch (err) {
     const reason =
       err && typeof err === 'object' && 'name' in err && err.name === 'TimeoutError'
         ? 'timeout'
         : 'parse_or_network_error';
-    return jsonResponse(buildLocalStrumFallback(input, reason), 200);
+    return jsonResponse(buildLocalStrumFallback(input, reason, attemptedModels), 200);
   }
 }
