@@ -212,7 +212,7 @@ async function callGeminiGenerateContent(apiKey, model, input) {
         ...(isFlash25 ? { thinkingConfig: { thinkingBudget: 0 } } : {}),
       },
     }),
-    signal: AbortSignal.timeout(5500),
+    signal: AbortSignal.timeout(7500),
   });
 }
 
@@ -277,7 +277,7 @@ async function discoverFallbackGeminiModels(apiKey, excludeSet) {
 export async function GET() {
   const aiConfigured = Boolean(process.env.GEMINI_API_KEY?.trim());
   const model =
-    cachedResolvedModel || normalizeModelId(process.env.GEMINI_MODEL || 'gemini-2.5-flash');
+    cachedResolvedModel || normalizeModelId(process.env.GEMINI_MODEL || 'gemini-3.8-flash');
   return jsonResponse({ aiConfigured, model }, 200);
 }
 
@@ -309,7 +309,7 @@ export async function POST(request) {
   }
 
   const envModel = process.env.GEMINI_MODEL?.trim();
-  const configuredModel = normalizeModelId(envModel || 'gemini-2.5-flash');
+  const configuredModel = normalizeModelId(envModel || 'gemini-3.8-flash');
   const initialModel = envModel ? configuredModel : cachedResolvedModel || configuredModel;
 
   const tried = new Set();

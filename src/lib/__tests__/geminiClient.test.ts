@@ -125,7 +125,7 @@ describe('Gemini proxy & client graceful fallback', () => {
     expect(data.notice).toBe(LOCAL_FALLBACK_NOTICE);
     expect(data.fallbackReason).toBe('http_500');
     expect(errorSpy).toHaveBeenCalledWith('[api/inspiration] Gemini upstream error', {
-      model: 'gemini-2.5-flash',
+      model: 'gemini-3.8-flash',
       status: 500,
       detail: 'upstream error',
     });
@@ -199,7 +199,7 @@ describe('Gemini proxy & client graceful fallback', () => {
 
   it('auto-discovers an active Flash model via ListModels when default model returns 404', async () => {
     process.env.GEMINI_API_KEY = 'fake-test-gemini-key';
-    delete process.env.GEMINI_MODEL;
+    process.env.GEMINI_MODEL = 'gemini-2.5-flash';
 
     const fetchSpy = vi
       .spyOn(globalThis, 'fetch')
@@ -268,7 +268,7 @@ describe('Gemini proxy & client graceful fallback', () => {
 
   it('retries the next ranked ListModels candidate on HTTP 503 and caches only the working model', async () => {
     process.env.GEMINI_API_KEY = 'fake-test-gemini-key';
-    delete process.env.GEMINI_MODEL;
+    process.env.GEMINI_MODEL = 'gemini-2.5-flash';
 
     const fetchSpy = vi
       .spyOn(globalThis, 'fetch')
