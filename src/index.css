@@ -199,10 +199,6 @@
     transform-box: fill-box;
     transform-origin: center;
   }
-
-  .landing-marquee-track {
-    animation: landingMarquee 28s linear infinite;
-  }
 }
 
 @layer utilities {
@@ -222,14 +218,8 @@
   100% { transform: translateX(0); }
 }
 
-@keyframes landingMarquee {
-  0%   { transform: translateX(0); }
-  100% { transform: translateX(-50%); }
-}
-
 @media (prefers-reduced-motion: reduce) {
-  .string-pluck-active,
-  .landing-marquee-track {
+  .string-pluck-active {
     animation: none !important;
   }
 }

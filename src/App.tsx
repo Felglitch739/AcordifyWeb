@@ -533,6 +533,7 @@ function App() {
         <LandingPage
           onEnterStudio={handleEnterStudio}
           onOpenAuth={() => setAuthModalOpen(true)}
+          onOpenTuner={handleOpenTuner}
           authUser={authUser}
           isAuthConfigured={isNeonAuthConfigured}
           onPreviewChord={(symbol) => void player.previewChord(symbol)}
@@ -779,11 +780,6 @@ function App() {
             Acordify · Guitarra: progresiones, círculo de quintas, escalas y afinador directo en tu navegador.
           </footer>
 
-          <TunerPanel
-            isOpen={tunerOpen}
-            onClose={() => setTunerOpen(false)}
-            guitarTone={guitarTone}
-          />
           <SavedProgressionsDrawer
             isOpen={savedOpen}
             items={savedItems}
@@ -801,6 +797,11 @@ function App() {
         </div>
       )}
 
+      <TunerPanel
+        isOpen={tunerOpen}
+        onClose={() => setTunerOpen(false)}
+        guitarTone={guitarTone}
+      />
       <AuthModal
         isOpen={authModalOpen}
         onClose={() => setAuthModalOpen(false)}

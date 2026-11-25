@@ -1,4 +1,4 @@
-import React, { useEffect, useId, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { Eye, EyeOff, Volume2, X } from 'lucide-react';
 import { authClient } from '../lib/neonAuth';
@@ -40,9 +40,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   onAuthSuccess,
   onPluckNote,
 }) => {
-  const uid = useId().replace(/:/g, '');
-  const grainId = `auth-grain-${uid}`;
-
   const [tab, setTab] = useState<AuthTab>('signin');
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -66,7 +63,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const client = authClient;
   if (!client) return null;
 
-  // Live typing resonance across 6 guitar strings (0..6 tuned pegs)
   const tunedPegCount = (() => {
     let score = 0;
     const trimmedEmail = email.trim();
@@ -86,6 +82,15 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const pluckPassString = (idx: number, note: string) => {
     setStringPlucks((prev) => ({ ...prev, [idx]: (prev[idx] ?? 0) + 1 }));
     onPluckNote?.(note);
+  };
+
+  const handleStrumNeck = () => {
+    [...PASS_STRINGS].reverse().forEach((str, step) => {
+      const origIdx = PASS_STRINGS.length - 1 - step;
+      window.setTimeout(() => {
+        pluckPassString(origIdx, str.note);
+      }, step * 48);
+    });
   };
 
   const handleGoogleSignIn = async () => {
@@ -150,89 +155,63 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          transition={{ duration: 0.16 }}
+          transition={{ duration: 0.15 }}
           onClick={onClose}
-          className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--color-backdrop)] p-3 sm:p-5 backdrop-blur-[3px]"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--color-backdrop)] p-3 sm:p-5 backdrop-blur-[2px]"
           role="dialog"
           aria-modal="true"
           aria-labelledby="auth-modal-title"
         >
           <motion.div
             key="auth-modal"
-            initial={{ opacity: 0, y: 14, scale: 0.98 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 10, scale: 0.98 }}
-            transition={{ type: 'spring', stiffness: 400, damping: 32 }}
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 6 }}
+            transition={{ duration: 0.16, ease: [0.22, 1, 0.36, 1] }}
             onClick={(e) => e.stopPropagation()}
-            className="surface-card w-full max-w-[840px] max-h-[92vh] overflow-y-auto overflow-x-hidden p-0 shadow-[0_30px_80px_-24px_rgba(17,17,17,0.42)] grid grid-cols-1 md:grid-cols-12"
+            className="surface-card w-full max-w-[820px] max-h-[92vh] overflow-y-auto overflow-x-hidden p-0 shadow-[0_24px_60px_-24px_rgba(17,17,17,0.36)] grid grid-cols-1 md:grid-cols-12"
           >
-            {/* Left Split Vinyl / Luthier Showcase Pane */}
-            <div className="md:col-span-5 relative overflow-hidden bg-[#111111] text-white p-6 sm:p-7 flex flex-col justify-between gap-6">
-              <svg className="sr-only" width="0" height="0" aria-hidden="true">
-                <defs>
-                  <filter id={grainId}>
-                    <feTurbulence
-                      type="fractalNoise"
-                      baseFrequency="0.85"
-                      numOctaves="3"
-                      stitchTiles="stitch"
-                    />
-                  </filter>
-                </defs>
-              </svg>
-              <div
-                className="pointer-events-none absolute inset-0 opacity-[0.07]"
-                style={{ filter: `url(#${grainId})` }}
-                aria-hidden="true"
-              />
-              <div
-                className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full bg-[#E85D3D]/22 blur-3xl"
-                aria-hidden="true"
-              />
-
-              <div className="relative z-10 space-y-4">
-                <div className="flex items-center gap-2.5">
-                  <motion.svg
-                    viewBox="0 0 36 36"
-                    className="w-7 h-7 shrink-0"
-                    animate={{ rotate: 360 }}
-                    transition={{ duration: 18, repeat: Infinity, ease: 'linear' }}
-                    aria-hidden="true"
-                  >
-                    <circle cx="18" cy="18" r="16" fill="#1C1C1F" stroke="#3F3F46" strokeWidth="1" />
-                    <circle cx="18" cy="18" r="11" fill="none" stroke="#27272A" strokeWidth="1" />
-                    <circle cx="18" cy="18" r="5" fill="#E85D3D" />
-                    <circle cx="18" cy="18" r="1.5" fill="#111111" />
-                  </motion.svg>
-                  <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-zinc-400">
-                    Pase de estudio · Opcional
-                  </span>
-                </div>
-
+            {/* Left Ebony Fretboard Pass */}
+            <div className="md:col-span-5 bg-[#111111] text-white p-6 sm:p-7 flex flex-col justify-between gap-6 border-b md:border-b-0 md:border-r border-white/10">
+              <div className="space-y-2">
                 <h3 className="text-2xl sm:text-[28px] font-medium leading-[1.12] tracking-[-0.025em] text-white">
-                  Tu libreta,{' '}
+                  Tu libreta,
                   <span className="font-editorial text-[#E85D3D] block">
                     en cualquier guitarra.
                   </span>
                 </h3>
               </div>
 
-              {/* Interactive 6-String Harmonic Harp */}
+              {/* Architectural Ebony Neck with 6 Interactive Strings */}
               <div
-                className="relative z-10 rounded-[14px] border border-white/10 bg-white/[0.04] p-3.5 space-y-2.5"
+                className="relative overflow-hidden rounded-[12px] border border-white/12 bg-[#18181B] p-4 space-y-3"
                 data-auth-strings="true"
               >
-                <div className="flex items-center justify-between gap-2 font-mono text-[10px] uppercase tracking-wider text-zinc-400">
-                  <span className="inline-flex items-center gap-1.5">
-                    <Volume2 className="w-3 h-3 text-[#E85D3D]" />
-                    <span>Cuerdas interactivas</span>
+                {/* Vertical Nut + Fret Inlays */}
+                <div
+                  className="pointer-events-none absolute inset-y-10 left-[76px] right-4 grid grid-cols-3"
+                  aria-hidden="true"
+                >
+                  <span className="border-l-[3px] border-zinc-300/75" />
+                  <span className="border-l border-white/10 flex items-center justify-center">
+                    <span className="h-1.5 w-1.5 rounded-full bg-white/15" />
                   </span>
-                  <span className="text-zinc-300 num-tabular">
-                    Afinación: {tunedPegCount}/6
-                  </span>
+                  <span className="border-l border-white/10" />
                 </div>
 
-                <div className="space-y-1.5">
+                <div className="flex items-center justify-between gap-2 font-mono text-[10px] uppercase tracking-wider text-zinc-400">
+                  <span>Afinación de sesión: {tunedPegCount}/6</span>
+                  <button
+                    type="button"
+                    onClick={handleStrumNeck}
+                    className="inline-flex items-center gap-1 rounded-full border border-white/15 bg-white/[0.06] px-2.5 py-0.5 text-[10px] text-white hover:bg-white/12 transition-colors duration-150 cursor-pointer"
+                  >
+                    <Volume2 className="w-3 h-3 text-[#E85D3D]" />
+                    <span>Rasguear</span>
+                  </button>
+                </div>
+
+                <div className="relative z-10 space-y-1.5">
                   {PASS_STRINGS.map((str, idx) => {
                     const isLit = idx < tunedPegCount;
                     const pluckCount = stringPlucks[idx] ?? 0;
@@ -245,28 +224,24 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                         aria-label={`Tocar cuerda ${str.label}`}
                       >
                         <span
-                          className={`h-2 w-2 rounded-full shrink-0 transition-colors ${
-                            isLit
-                              ? 'bg-[#E85D3D] shadow-[0_0_8px_rgba(232,93,61,0.75)]'
-                              : 'bg-zinc-700 group-hover:bg-zinc-400'
+                          className={`h-2 w-2 rounded-full shrink-0 transition-colors duration-150 ${
+                            isLit ? 'bg-[#E85D3D]' : 'bg-zinc-700 group-hover:bg-zinc-400'
                           }`}
                         />
-                        <span className="w-7 text-left font-mono text-[10px] text-zinc-400 group-hover:text-white transition-colors">
+                        <span className="w-7 text-left font-mono text-[10px] text-zinc-400 group-hover:text-white transition-colors duration-150">
                           {str.label}
                         </span>
                         <span className="relative flex-1 h-2 flex items-center">
                           <motion.span
                             key={`auth-s-${idx}-${pluckCount}`}
                             animate={
-                              pluckCount > 0
-                                ? { scaleY: [1, 2.3, 0.75, 1.3, 1] }
-                                : undefined
+                              pluckCount > 0 ? { scaleY: [1, 2.2, 0.8, 1] } : undefined
                             }
-                            transition={{ duration: 0.4 }}
-                            className={`block w-full rounded-full transition-colors ${
+                            transition={{ duration: 0.28 }}
+                            className={`block w-full rounded-full transition-colors duration-150 ${
                               isLit
                                 ? 'bg-[#E85D3D]/85'
-                                : 'bg-zinc-600/80 group-hover:bg-zinc-300'
+                                : 'bg-zinc-500/75 group-hover:bg-zinc-300'
                             }`}
                             style={{ height: `${str.thickness}px` }}
                           />
@@ -277,25 +252,20 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 </div>
               </div>
 
-              <p className="relative z-10 text-xs text-zinc-400 leading-relaxed">
-                Las herramientas siempre son libres sin cuenta. Entra solo si quieres guardar tus vueltas en la nube y abrirlas desde cualquier dispositivo.
+              <p className="text-xs text-zinc-400 leading-relaxed">
+                Opcional. Solo sirve para guardar tus progresiones en la nube; todas las herramientas funcionan sin cuenta.
               </p>
             </div>
 
-            {/* Right Column: Clean Form & Google Pass */}
+            {/* Right Form Surface */}
             <div className="md:col-span-7 p-6 sm:p-8 flex flex-col justify-center bg-[var(--color-surface)]">
               <div className="flex items-start justify-between gap-4 border-b border-[var(--color-border)] pb-4">
-                <div>
-                  <p className="font-mono text-[11px] uppercase tracking-[0.14em] text-[var(--color-ink-muted)]">
-                    Acceso directo · Sin spam
-                  </p>
-                  <h2
-                    id="auth-modal-title"
-                    className="text-2xl font-medium text-[var(--color-ink)] mt-1"
-                  >
-                    {tab === 'signin' ? 'Sincronizar libreta' : 'Crear cuenta'}
-                  </h2>
-                </div>
+                <h2
+                  id="auth-modal-title"
+                  className="text-2xl font-medium text-[var(--color-ink)]"
+                >
+                  {tab === 'signin' ? 'Sincronizar libreta' : 'Crear cuenta'}
+                </h2>
                 <button
                   type="button"
                   onClick={onClose}
@@ -306,15 +276,12 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 </button>
               </div>
 
-              {/* Google OAuth Button */}
               <div className="mt-5">
-                <motion.button
-                  whileHover={{ y: -1 }}
-                  whileTap={{ scale: 0.99 }}
+                <button
                   type="button"
                   disabled={isPending}
                   onClick={() => void handleGoogleSignIn()}
-                  className="btn-secondary w-full py-3 text-sm bg-[var(--color-surface-board)] border-[var(--color-border-strong)] shadow-xs"
+                  className="btn-secondary w-full py-2.5 text-sm bg-[var(--color-surface-board)] border-[var(--color-border-strong)]"
                 >
                   <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" aria-hidden="true">
                     <path
@@ -335,7 +302,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     />
                   </svg>
                   <span>Continuar con Google</span>
-                </motion.button>
+                </button>
               </div>
 
               <div className="my-5 flex items-center gap-3">
@@ -346,7 +313,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 <div className="h-px flex-1 bg-[var(--color-border)]" />
               </div>
 
-              {/* Morphing Segmented Switcher */}
               <div className="grid grid-cols-2 rounded-full bg-[var(--color-surface-subtle)] p-1 mb-4">
                 {(
                   [
@@ -363,7 +329,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                         setTab(item.id);
                         setErrorMsg(null);
                       }}
-                      className={`relative rounded-full py-1.5 text-xs font-medium transition-colors cursor-pointer ${
+                      className={`relative rounded-full py-1.5 text-xs font-medium transition-colors duration-150 cursor-pointer ${
                         active
                           ? 'text-white'
                           : 'text-[var(--color-ink-secondary)] hover:text-[var(--color-ink)]'
@@ -372,7 +338,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                       {active && (
                         <motion.span
                           layoutId="auth-tab-pill"
-                          transition={{ type: 'spring', stiffness: 460, damping: 34 }}
+                          transition={{ duration: 0.16, ease: [0.22, 1, 0.36, 1] }}
                           className="absolute inset-0 rounded-full bg-[var(--color-ink)]"
                           aria-hidden="true"
                         />
@@ -391,7 +357,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                       initial={{ opacity: 0, height: 0 }}
                       animate={{ opacity: 1, height: 'auto' }}
                       exit={{ opacity: 0, height: 0 }}
-                      transition={{ duration: 0.16 }}
+                      transition={{ duration: 0.15 }}
                       className="overflow-hidden"
                     >
                       <label
@@ -464,7 +430,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                       {[1, 2, 3, 4].map((bar) => (
                         <span
                           key={bar}
-                          className={`h-1 flex-1 rounded-full transition-colors ${
+                          className={`h-1 flex-1 rounded-full transition-colors duration-150 ${
                             passwordStrengthBars >= bar
                               ? passwordStrengthBars === 4
                                 ? 'bg-[var(--color-ok)]'
@@ -481,13 +447,15 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 </div>
 
                 {errorMsg && (
-                  <div className="rounded-[12px] border border-[var(--color-accent-border)] bg-[var(--color-accent-tint)] p-3 text-xs text-[var(--color-ink)]">
+                  <div
+                    role="alert"
+                    className="rounded-[12px] border border-[var(--color-accent-border)] bg-[var(--color-accent-tint)] p-3 text-xs text-[var(--color-ink)]"
+                  >
                     {errorMsg}
                   </div>
                 )}
 
-                <motion.button
-                  whileTap={{ scale: 0.99 }}
+                <button
                   type="submit"
                   disabled={isPending}
                   className="btn-primary w-full py-2.5 text-sm"
@@ -497,7 +465,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     : tab === 'signin'
                       ? 'Entrar'
                       : 'Crear cuenta'}
-                </motion.button>
+                </button>
               </form>
             </div>
           </motion.div>
