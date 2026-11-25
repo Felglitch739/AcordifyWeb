@@ -1,273 +1,18 @@
 @import "tailwindcss";
+@import "./styles/tokens.css";
 @config "../tailwind.config.js";
 
-/* ─────────────────────────────────────────────────────────────────────────────
-   Acordify — 4-World Studio Design System
-   Apple Liquid Glass · OP-1 Field Hardware · Vinilo Zine · Luthier Nocturno
-   ────────────────────────────────────────────────────────────────────────── */
-
-:root {
-  /* Default Warm Luthier / Fallback Tokens */
-  --bg-canvas: #11100E;
-  --bg-surface: #181613;
-  --bg-surface-elevated: #201D18;
-  --bg-recessed: #0E0D0B;
-  --header-bg: rgba(17, 16, 14, 0.88);
-  --backdrop-scrim: rgba(0, 0, 0, 0.75);
-
-  --text-primary: #F5EFE6;
-  --text-secondary: #A9A093;
-  --text-muted: #6E665C;
-
-  --border-subtle: rgba(244, 236, 224, 0.085);
-  --border-strong: rgba(244, 236, 224, 0.16);
-  --slider-track: rgba(244, 236, 224, 0.14);
-
-  --mood-accent: #8AB08F;
-  --mood-tint: rgba(138, 176, 143, 0.11);
-  --mood-border: rgba(138, 176, 143, 0.36);
-  --accent-ink: #11100E;
-
-  /* Legacy alias tokens preserved for secondary/legacy tests */
-  --bg-primary: var(--bg-canvas);
-  --bg-secondary: var(--bg-surface);
-  --bg-tertiary: var(--bg-surface-elevated);
-  --accent-primary: var(--mood-accent);
-  --accent-secondary: #C69764;
-  --border-color: var(--border-subtle);
-  --status-active: #8AB08F;
-  --mood-accent-2: #C69764;
-  --mood-glow: var(--mood-tint);
-  --mood-surface-tint: var(--mood-tint);
-}
-
-/* ══ WORLD 1: APPLE LIQUID GLASS / CUPEERTINO CERAMIC STUDIO ═════════════════ */
-[data-studio="apple"] {
-  --bg-canvas: #F5F5F7;
-  --bg-surface: rgba(255, 255, 255, 0.88);
-  --bg-surface-elevated: #FFFFFF;
-  --bg-recessed: #EBECEF;
-  --header-bg: rgba(255, 255, 255, 0.74);
-  --backdrop-scrim: rgba(15, 23, 42, 0.32);
-
-  --text-primary: #1D1D1F;
-  --text-secondary: #515154;
-  --text-muted: #76767B;
-
-  --border-subtle: rgba(29, 29, 31, 0.085);
-  --border-strong: rgba(29, 29, 31, 0.16);
-  --slider-track: rgba(29, 29, 31, 0.15);
-  --accent-ink: #FFFFFF;
-}
-
-[data-studio="apple"][data-mood="calm"] {
-  --mood-accent: #1F7A36;
-  --mood-tint: rgba(31, 122, 54, 0.10);
-  --mood-border: rgba(31, 122, 54, 0.34);
-  --accent-ink: #FFFFFF;
-}
-
-[data-studio="apple"][data-mood="melancholic"] {
-  --mood-accent: #0071E3;
-  --mood-tint: rgba(0, 113, 227, 0.10);
-  --mood-border: rgba(0, 113, 227, 0.34);
-  --accent-ink: #FFFFFF;
-}
-
-[data-studio="apple"][data-mood="nostalgic"] {
-  --mood-accent: #B85D00;
-  --mood-tint: rgba(184, 93, 0, 0.10);
-  --mood-border: rgba(184, 93, 0, 0.34);
-  --accent-ink: #FFFFFF;
-}
-
-[data-studio="apple"][data-mood="bright"] {
-  --mood-accent: #F2B705;
-  --mood-tint: rgba(242, 183, 5, 0.16);
-  --mood-border: rgba(212, 152, 0, 0.42);
-  --accent-ink: #1D1D1F;
-}
-
-[data-studio="apple"][data-mood="energetic"] {
-  --mood-accent: #D71947;
-  --mood-tint: rgba(215, 25, 71, 0.10);
-  --mood-border: rgba(215, 25, 71, 0.34);
-  --accent-ink: #FFFFFF;
-}
-
-/* ══ WORLD 2: TEENAGE ENGINEERING OP-1 FIELD / HARDWARE TÁCTIL ════════════════ */
-[data-studio="op1"] {
-  --bg-canvas: #E6E4DE;
-  --bg-surface: #EFECE6;
-  --bg-surface-elevated: #F8F6F1;
-  --bg-recessed: #DDD9CF;
-  --header-bg: rgba(230, 228, 222, 0.92);
-  --backdrop-scrim: rgba(24, 25, 27, 0.48);
-
-  --text-primary: #18191B;
-  --text-secondary: #505258;
-  --text-muted: #70737A;
-
-  --border-subtle: rgba(24, 25, 27, 0.13);
-  --border-strong: rgba(24, 25, 27, 0.25);
-  --slider-track: rgba(24, 25, 27, 0.18);
-  --accent-ink: #FFFFFF;
-}
-
-[data-studio="op1"][data-mood="calm"] {
-  --mood-accent: #0F7E57;
-  --mood-tint: rgba(15, 126, 87, 0.11);
-  --mood-border: rgba(15, 126, 87, 0.38);
-  --accent-ink: #FFFFFF;
-}
-
-[data-studio="op1"][data-mood="melancholic"] {
-  --mood-accent: #2762EB;
-  --mood-tint: rgba(39, 98, 235, 0.11);
-  --mood-border: rgba(39, 98, 235, 0.38);
-  --accent-ink: #FFFFFF;
-}
-
-[data-studio="op1"][data-mood="nostalgic"] {
-  --mood-accent: #E64A19;
-  --mood-tint: rgba(230, 74, 25, 0.12);
-  --mood-border: rgba(230, 74, 25, 0.42);
-  --accent-ink: #FFFFFF;
-}
-
-[data-studio="op1"][data-mood="bright"] {
-  --mood-accent: #F5B400;
-  --mood-tint: rgba(245, 180, 0, 0.17);
-  --mood-border: rgba(196, 142, 0, 0.46);
-  --accent-ink: #18191B;
-}
-
-[data-studio="op1"][data-mood="energetic"] {
-  --mood-accent: #D62839;
-  --mood-tint: rgba(214, 40, 57, 0.12);
-  --mood-border: rgba(214, 40, 57, 0.40);
-  --accent-ink: #FFFFFF;
-}
-
-/* ══ WORLD 3: VINILO ZINE / NEO-BRUTALIST INDIE RECORD SLEEVE ═════════════════ */
-[data-studio="vinyl"] {
-  --bg-canvas: #F3EDE0;
-  --bg-surface: #FBF8F0;
-  --bg-surface-elevated: #FFFDF7;
-  --bg-recessed: #EAE2D0;
-  --header-bg: rgba(243, 237, 224, 0.94);
-  --backdrop-scrim: rgba(20, 18, 16, 0.56);
-
-  --text-primary: #141210;
-  --text-secondary: #3E3A34;
-  --text-muted: #6A6358;
-
-  --border-subtle: rgba(20, 18, 16, 0.85);
-  --border-strong: #141210;
-  --slider-track: rgba(20, 18, 16, 0.25);
-  --accent-ink: #FFFDF7;
-}
-
-[data-studio="vinyl"][data-mood="calm"] {
-  --mood-accent: #226B43;
-  --mood-tint: rgba(34, 107, 67, 0.13);
-  --mood-border: #141210;
-  --accent-ink: #FFFDF7;
-}
-
-[data-studio="vinyl"][data-mood="melancholic"] {
-  --mood-accent: #1D4ED8;
-  --mood-tint: rgba(29, 78, 216, 0.12);
-  --mood-border: #141210;
-  --accent-ink: #FFFDF7;
-}
-
-[data-studio="vinyl"][data-mood="nostalgic"] {
-  --mood-accent: #D83B26;
-  --mood-tint: rgba(216, 59, 38, 0.13);
-  --mood-border: #141210;
-  --accent-ink: #FFFDF7;
-}
-
-[data-studio="vinyl"][data-mood="bright"] {
-  --mood-accent: #D4F350;
-  --mood-tint: rgba(212, 243, 80, 0.38);
-  --mood-border: #141210;
-  --accent-ink: #141210;
-}
-
-[data-studio="vinyl"][data-mood="energetic"] {
-  --mood-accent: #CE1B45;
-  --mood-tint: rgba(206, 27, 69, 0.13);
-  --mood-border: #141210;
-  --accent-ink: #FFFDF7;
-}
-
-/* ══ WORLD 4: LUTHIER NOCTURNO / WARM WALNUT STUDIO ═══════════════════════════ */
-[data-studio="luthier"] {
-  --bg-canvas: #11100E;
-  --bg-surface: #181613;
-  --bg-surface-elevated: #201D18;
-  --bg-recessed: #0E0D0B;
-  --header-bg: rgba(17, 16, 14, 0.88);
-  --backdrop-scrim: rgba(0, 0, 0, 0.76);
-
-  --text-primary: #F5EFE6;
-  --text-secondary: #A9A093;
-  --text-muted: #6E665C;
-
-  --border-subtle: rgba(244, 236, 224, 0.085);
-  --border-strong: rgba(244, 236, 224, 0.16);
-  --slider-track: rgba(244, 236, 224, 0.15);
-  --accent-ink: #11100E;
-}
-
-[data-studio="luthier"][data-mood="calm"] {
-  --mood-accent: #8AB08F;
-  --mood-tint: rgba(138, 176, 143, 0.11);
-  --mood-border: rgba(138, 176, 143, 0.36);
-  --accent-ink: #11100E;
-}
-
-[data-studio="luthier"][data-mood="melancholic"] {
-  --mood-accent: #7F96B5;
-  --mood-tint: rgba(127, 150, 181, 0.12);
-  --mood-border: rgba(127, 150, 181, 0.38);
-  --accent-ink: #11100E;
-}
-
-[data-studio="luthier"][data-mood="nostalgic"] {
-  --mood-accent: #E29552;
-  --mood-tint: rgba(226, 149, 82, 0.12);
-  --mood-border: rgba(226, 149, 82, 0.38);
-  --accent-ink: #11100E;
-}
-
-[data-studio="luthier"][data-mood="bright"] {
-  --mood-accent: #E0B856;
-  --mood-tint: rgba(224, 184, 86, 0.12);
-  --mood-border: rgba(224, 184, 86, 0.38);
-  --accent-ink: #11100E;
-}
-
-[data-studio="luthier"][data-mood="energetic"] {
-  --mood-accent: #DE6B48;
-  --mood-tint: rgba(222, 107, 72, 0.12);
-  --mood-border: rgba(222, 107, 72, 0.40);
-  --accent-ink: #11100E;
-}
-
 @theme {
-  --color-th-bg-primary: var(--bg-canvas);
-  --color-th-bg-secondary: var(--bg-surface);
-  --color-th-bg-tertiary: var(--bg-surface-elevated);
-  --color-th-accent-primary: var(--mood-accent);
-  --color-th-accent-secondary: #C69764;
-  --color-th-text-primary: var(--text-primary);
-  --color-th-text-secondary: var(--text-secondary);
-  --color-th-text-muted: var(--text-muted);
-  --color-th-border: var(--border-subtle);
-  --color-th-status-active: var(--status-active);
+  --color-th-bg-primary: var(--color-bg);
+  --color-th-bg-secondary: var(--color-surface);
+  --color-th-bg-tertiary: var(--color-surface-subtle);
+  --color-th-accent-primary: var(--color-accent);
+  --color-th-accent-secondary: var(--color-ink);
+  --color-th-text-primary: var(--color-ink);
+  --color-th-text-secondary: var(--color-ink-secondary);
+  --color-th-text-muted: var(--color-ink-muted);
+  --color-th-border: var(--color-border);
+  --color-th-status-active: var(--color-ok);
 }
 
 @layer base {
@@ -281,24 +26,24 @@
     -webkit-text-size-adjust: 100%;
     text-size-adjust: 100%;
     scroll-behavior: smooth;
+    color-scheme: light;
   }
 
   body {
     margin: 0;
     padding: 0;
-    background-color: var(--bg-canvas);
-    color: var(--text-primary);
-    font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+    background-color: var(--color-bg);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
     font-size: 1rem;
-    line-height: 1.55;
+    line-height: 1.5;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     text-rendering: optimizeLegibility;
-    transition: background-color 260ms ease, color 260ms ease;
   }
 
   :focus-visible {
-    outline: 2px solid var(--mood-accent);
+    outline: 2px solid var(--color-accent);
     outline-offset: 2px;
   }
 
@@ -307,7 +52,7 @@
   }
 
   h1, h2, h3, h4, h5, h6 {
-    color: var(--text-primary);
+    color: var(--color-ink);
     margin: 0;
     letter-spacing: -0.02em;
   }
@@ -317,7 +62,7 @@
   }
 
   code, kbd, pre, samp, .font-mono {
-    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-family: var(--font-mono);
   }
 
   a {
@@ -336,222 +81,112 @@
 }
 
 @layer components {
-  .font-serif-editorial {
-    font-family: 'Instrument Serif', Georgia, serif;
-    letter-spacing: -0.015em;
+  .font-editorial {
+    font-family: var(--font-editorial);
+    font-style: italic;
+    font-weight: 400;
   }
 
-  .font-hardware {
-    font-family: 'Space Grotesk', 'Plus Jakarta Sans', sans-serif;
-    letter-spacing: -0.02em;
+  .surface-card {
+    background-color: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-card);
   }
 
-  .font-poster {
-    font-family: 'Syne', 'Space Grotesk', sans-serif;
-    letter-spacing: -0.03em;
+  .btn-primary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    border-radius: var(--radius-pill);
+    background-color: var(--color-ink);
+    color: var(--color-surface);
+    font-weight: 500;
+    transition: opacity 150ms ease, background-color 150ms ease;
+    cursor: pointer;
   }
 
-  /* World Canvas Atmospheres */
-  .studio-world-luthier {
-    background-color: var(--bg-canvas);
-    background-image: radial-gradient(
-      ellipse 78% 42% at 50% -6%,
-      rgba(226, 149, 82, 0.085) 0%,
-      rgba(226, 149, 82, 0.025) 48%,
-      transparent 78%
-    );
+  .btn-primary:hover:not(:disabled) {
+    opacity: 0.88;
   }
 
-  .studio-world-apple {
-    background-color: var(--bg-canvas);
-    background-image:
-      radial-gradient(ellipse 85% 48% at 15% -5%, rgba(0, 113, 227, 0.075), transparent 62%),
-      radial-gradient(ellipse 75% 42% at 88% 4%, rgba(255, 195, 110, 0.09), transparent 58%);
+  .btn-primary:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
   }
 
-  .studio-world-op1 {
-    background-color: var(--bg-canvas);
-    background-image: linear-gradient(
-      180deg,
-      rgba(255, 255, 255, 0.25) 0%,
-      transparent 16%,
-      rgba(0, 0, 0, 0.03) 100%
-    );
+  .btn-secondary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.375rem;
+    border-radius: var(--radius-pill);
+    border: 1px solid var(--color-border);
+    background-color: transparent;
+    color: var(--color-ink);
+    font-weight: 500;
+    transition: border-color 150ms ease, background-color 150ms ease;
+    cursor: pointer;
   }
 
-  .studio-world-vinyl {
-    background-color: var(--bg-canvas);
-    background-image: radial-gradient(rgba(20, 18, 16, 0.07) 1px, transparent 1px);
-    background-size: 16px 16px;
+  .btn-secondary:hover:not(:disabled) {
+    border-color: var(--color-ink-muted);
+    background-color: var(--color-surface-subtle);
   }
 
-  .studio-grain {
-    position: fixed;
-    inset: 0;
-    z-index: 5;
-    pointer-events: none;
-    opacity: 0.028;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23n)' opacity='1'/%3E%3C/svg%3E");
-  }
-
-  /* Surface Primitives */
-  .studio-surface {
-    background-color: var(--bg-surface);
-    border: 1px solid var(--border-subtle);
-    box-shadow:
-      inset 0 1px 0 rgba(244, 236, 224, 0.045),
-      0 14px 36px -22px rgba(0, 0, 0, 0.35);
-  }
-
-  .studio-recessed {
-    background-color: var(--bg-recessed);
-    border: 1px solid var(--border-subtle);
-    box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.12);
-  }
-
-  [data-studio="luthier"] .studio-recessed {
-    box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.55);
-  }
-
-  /* Apple Liquid Glass Floating Control Layer */
-  .apple-liquid-glass {
-    background: linear-gradient(
-      180deg,
-      rgba(255, 255, 255, 0.80) 0%,
-      rgba(248, 249, 252, 0.64) 100%
-    );
-    backdrop-filter: blur(26px) saturate(190%);
-    -webkit-backdrop-filter: blur(26px) saturate(190%);
-    border: 1px solid rgba(255, 255, 255, 0.72);
-    box-shadow:
-      0 20px 44px -18px rgba(15, 23, 42, 0.22),
-      0 2px 8px -2px rgba(15, 23, 42, 0.08),
-      inset 0 1px 0 rgba(255, 255, 255, 0.94),
-      inset 0 -1px 0 rgba(0, 0, 0, 0.04);
-  }
-
-  .apple-ceramic-card {
-    background: #FFFFFF;
-    border: 1px solid rgba(29, 29, 31, 0.07);
-    box-shadow:
-      0 10px 30px -12px rgba(15, 23, 42, 0.10),
-      0 1px 3px rgba(15, 23, 42, 0.04),
-      inset 0 1px 0 rgba(255, 255, 255, 1);
-  }
-
-  /* OP-1 Field Hardware Primitives */
-  .op1-chassis {
-    background: linear-gradient(180deg, #F4F1EB 0%, #EAE6DE 100%);
-    border: 1px solid rgba(24, 25, 27, 0.16);
-    box-shadow:
-      0 14px 32px -16px rgba(0, 0, 0, 0.22),
-      inset 0 1px 0 rgba(255, 255, 255, 0.85),
-      inset 0 -2px 0 rgba(0, 0, 0, 0.06);
-  }
-
-  .op1-oled-screen {
-    background: #0D0F12;
-    border: 2px solid #22252A;
-    box-shadow:
-      inset 0 3px 12px rgba(0, 0, 0, 0.85),
-      0 1px 0 rgba(255, 255, 255, 0.72);
-  }
-
-  .op1-keycap {
-    background: linear-gradient(180deg, #FAF8F4 0%, #EAE6DD 100%);
-    border: 1px solid rgba(24, 25, 27, 0.18);
-    box-shadow:
-      0 3px 0 #C4BFB4,
-      inset 0 1px 0 rgba(255, 255, 255, 0.9);
-    transition: transform 90ms ease, box-shadow 90ms ease;
-  }
-
-  .op1-keycap:active {
-    transform: translateY(2px);
-    box-shadow:
-      0 1px 0 #C4BFB4,
-      inset 0 1px 0 rgba(255, 255, 255, 0.75);
-  }
-
-  /* Vinilo Zine Neo-Brutalist Cards */
-  .vinyl-brutal-card {
-    background: #FBF8F0;
-    border: 2px solid #141210;
-    border-radius: 6px;
-    box-shadow: 4px 4px 0 #141210;
-    transition: transform 140ms ease, box-shadow 140ms ease;
-  }
-
-  .vinyl-brutal-card-active {
-    background: #FFFDF7;
-    border: 2px solid #141210;
-    border-radius: 6px;
-    box-shadow: 6px 6px 0 #141210;
-  }
-
-  /* Cross-Theme Range Slider */
   .studio-slider {
     -webkit-appearance: none;
     appearance: none;
     height: 4px;
-    border-radius: 9999px;
-    background: var(--slider-track);
+    border-radius: var(--radius-pill);
+    background: var(--color-border);
     cursor: pointer;
   }
 
   .studio-slider::-webkit-slider-thumb {
     -webkit-appearance: none;
     appearance: none;
-    width: 15px;
-    height: 15px;
-    border-radius: 9999px;
-    background: var(--bg-surface-elevated);
-    border: 2.5px solid var(--mood-accent);
-    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.32);
+    width: 14px;
+    height: 14px;
+    border-radius: var(--radius-pill);
+    background: var(--color-ink);
+    border: 2px solid var(--color-surface);
+    box-shadow: 0 1px 3px rgba(17, 17, 17, 0.25);
     transition: transform 140ms ease;
   }
 
   .studio-slider::-webkit-slider-thumb:hover {
-    transform: scale(1.14);
+    transform: scale(1.12);
   }
 
   .studio-slider::-moz-range-thumb {
-    width: 15px;
-    height: 15px;
-    border-radius: 9999px;
-    background: var(--bg-surface-elevated);
-    border: 2.5px solid var(--mood-accent);
-    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.32);
+    width: 14px;
+    height: 14px;
+    border-radius: var(--radius-pill);
+    background: var(--color-ink);
+    border: 2px solid var(--color-surface);
+    box-shadow: 0 1px 3px rgba(17, 17, 17, 0.25);
     transition: transform 140ms ease;
   }
 
-  .string-pluck-active {
-    animation: stringPluck 520ms cubic-bezier(0.22, 1, 0.36, 1);
-    transform-box: fill-box;
-    transform-origin: center;
-  }
-
-  .spin-slow-active {
-    animation: spinSlow var(--spin-duration, 3.2s) linear infinite;
-  }
-
   .chord-chip {
-    font-family: 'JetBrains Mono', monospace;
+    font-family: var(--font-mono);
     font-size: 0.8125rem;
-    font-weight: 600;
+    font-weight: 500;
     display: inline-flex;
     align-items: center;
     justify-content: center;
     padding: 0.25rem 0.625rem;
-    border-radius: 0.5rem;
-    background-color: var(--bg-recessed);
-    border: 1px solid var(--border-subtle);
-    color: var(--text-primary);
-    transition: border-color 180ms ease;
+    border-radius: 6px;
+    background-color: var(--color-surface-subtle);
+    border: 1px solid var(--color-border);
+    color: var(--color-ink);
   }
 
-  .chord-chip:hover {
-    border-color: var(--mood-border);
+  .string-pluck-active {
+    animation: stringPluck 480ms cubic-bezier(0.22, 1, 0.36, 1);
+    transform-box: fill-box;
+    transform-origin: center;
   }
 }
 
@@ -564,22 +199,16 @@
 
 @keyframes stringPluck {
   0%   { transform: translateX(0); }
-  14%  { transform: translateX(-1.7px); }
-  30%  { transform: translateX(1.5px); }
-  48%  { transform: translateX(-1.0px); }
-  66%  { transform: translateX(0.65px); }
-  84%  { transform: translateX(-0.3px); }
+  16%  { transform: translateX(-1.6px); }
+  34%  { transform: translateX(1.4px); }
+  52%  { transform: translateX(-0.9px); }
+  70%  { transform: translateX(0.55px); }
+  86%  { transform: translateX(-0.25px); }
   100% { transform: translateX(0); }
 }
 
-@keyframes spinSlow {
-  from { transform: rotate(0deg); }
-  to   { transform: rotate(360deg); }
-}
-
 @media (prefers-reduced-motion: reduce) {
-  .string-pluck-active,
-  .spin-slow-active {
+  .string-pluck-active {
     animation: none !important;
   }
 }

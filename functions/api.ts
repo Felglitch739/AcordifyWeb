@@ -87,96 +87,6 @@ function mapProgressionRow(row: ProgressionRow) {
   };
 }
 
-interface GatewayModelEntry {
-  id?: string;
-  enabled?: boolean;
-  unavailable_reason?: string | null;
-  recovery_url?: string | null;
-}
-
-interface GatewayStatus {
-  configured: boolean;
-  enabledModels: string[];
-  preferredModel: string | null;
-  unavailableReason: string | null;
-  recoveryUrl: string | null;
-}
-
-async function resolveGatewayStatus(): Promise<GatewayStatus> {
-  const baseUrl = process.env.NEON_AI_GATEWAY_BASE_URL;
-  const token = process.env.NEON_AI_GATEWAY_TOKEN;
-
-  if (!baseUrl || !token) {
-    return {
-      configured: false,
-      enabledModels: [],
-      preferredModel: null,
-      unavailableReason: "not_configured",
-      recoveryUrl: null,
-    };
-  }
-
-  const res = await fetch(`${baseUrl}/v1/models`, {
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
-  });
-
-  if (!res.ok) {
-    return {
-      configured: true,
-      enabledModels: [],
-      preferredModel: null,
-      unavailableReason: `gateway_http_${res.status}`,
-      recoveryUrl: null,
-    };
-  }
-
-  const payload = (await res.json()) as { data?: GatewayModelEntry[] };
-  const entries = Array.isArray(payload.data) ? payload.data : [];
-  const enabledModels = entries
-    .filter((entry) => entry.enabled === true && typeof entry.id === "string")
-    .map((entry) => entry.id as string);
-
-  const preferredModel =
-    enabledModels.find((id) => id.includes("gemini") && id.includes("flash")) ??
-    enabledModels.find((id) => id.includes("gemini")) ??
-    enabledModels[0] ??
-    null;
-
-  const firstRestricted = entries.find((entry) => entry.enabled === false);
-
-  return {
-    configured: true,
-    enabledModels,
-    preferredModel,
-    unavailableReason:
-      enabledModels.length > 0 ? null : firstRestricted?.unavailable_reason ?? null,
-    recoveryUrl:
-      enabledModels.length > 0 ? null : firstRestricted?.recovery_url ?? null,
-  };
-}
-
-function extractJsonObject(raw: string): Record<string, unknown> {
-  const cleaned = raw
-    .trim()
-    .replace(/^```json\s*/i, "")
-    .replace(/^```\s*/i, "")
-    .replace(/\s*```$/i, "")
-    .trim();
-
-  try {
-    return JSON.parse(cleaned) as Record<string, unknown>;
-  } catch {
-    const start = cleaned.indexOf("{");
-    const end = cleaned.lastIndexOf("}");
-    if (start !== -1 && end > start) {
-      return JSON.parse(cleaned.slice(start, end + 1)) as Record<string, unknown>;
-    }
-    throw new Error("Model output was not valid JSON");
-  }
-}
-
 const UUID_REGEX =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -213,9 +123,6 @@ app.get("/health", async (c) => {
       authConfigured: Boolean(
         process.env.NEON_AUTH_BASE_URL && process.env.NEON_AUTH_JWKS_URL,
       ),
-      aiGatewayConfigured: Boolean(
-        process.env.NEON_AI_GATEWAY_BASE_URL && process.env.NEON_AI_GATEWAY_TOKEN,
-      ),
     });
   } catch (err) {
     return c.json(
@@ -223,24 +130,6 @@ app.get("/health", async (c) => {
         ok: false,
         db: "error",
         message: err instanceof Error ? err.message : "Database check failed",
-      },
-      500,
-    );
-  }
-});
-
-app.get("/ai/status", async (c) => {
-  try {
-    const status = await resolveGatewayStatus();
-    return c.json(status);
-  } catch (err) {
-    return c.json(
-      {
-        configured: false,
-        enabledModels: [],
-        preferredModel: null,
-        unavailableReason: err instanceof Error ? err.message : "unknown_error",
-        recoveryUrl: null,
       },
       500,
     );
@@ -339,140 +228,6 @@ app.delete("/progressions/:id", async (c) => {
   }
 
   return c.json({ deleted: true, id: result.rows[0].id });
-});
-
-app.post("/ai/inspiration", async (c) => {
-  const authResult = await requireUser(c);
-  if (authResult instanceof Response) return authResult;
-
-  let body: Record<string, unknown>;
-  try {
-    body = (await c.req.json()) as Record<string, unknown>;
-  } catch {
-    return c.json({ error: "Invalid JSON body" }, 400);
-  }
-
-  const chords = Array.isArray(body.chords)
-    ? body.chords.filter((x): x is string => typeof x === "string" && x.trim().length > 0).slice(0, 8)
-    : [];
-  const keyRoot = typeof body.keyRoot === "string" ? body.keyRoot.trim() : "C";
-  const mode = body.mode === "minor" ? "minor" : "major";
-  const mood = typeof body.mood === "string" ? body.mood.trim() : "calm";
-  const bpm = typeof body.bpm === "number" && Number.isFinite(body.bpm) ? Math.round(body.bpm) : 80;
-  const theme = typeof body.theme === "string" ? body.theme.trim().slice(0, 140) : "";
-
-  if (chords.length === 0) {
-    return c.json({ error: "chords array is required" }, 400);
-  }
-
-  const status = await resolveGatewayStatus();
-  const baseUrl = process.env.NEON_AI_GATEWAY_BASE_URL;
-  const gatewayToken = process.env.NEON_AI_GATEWAY_TOKEN;
-
-  if (!baseUrl || !gatewayToken) {
-    return c.json({ error: "AI Gateway is not configured" }, 503);
-  }
-
-  if (!status.preferredModel) {
-    return c.json(
-      {
-        error: "AI Gateway credits required",
-        unavailableReason: status.unavailableReason ?? "paid_plan_required",
-        recoveryUrl: status.recoveryUrl,
-      },
-      402,
-    );
-  }
-
-  const prompt = [
-    `Tono: ${keyRoot} ${mode === "minor" ? "menor" : "mayor"}`,
-    `Ánimo: ${mood}`,
-    `Tempo: ${bpm} BPM`,
-    `Acordes en loop: ${chords.join(" - ")}`,
-    theme ? `Tema o imagen deseada: ${theme}` : "Tema libre, honesto y acústico en español.",
-    "",
-    'Devuelve ÚNICAMENTE un JSON válido sin markdown con esta estructura exacta:',
-    '{"title":"Título corto en español","lyrics":"[Acorde1]verso 1\\n[Acorde2]verso 2\\n[Acorde3]verso 3\\n[Acorde4]verso 4","strumTip":"Un consejo práctico de rasgueo o punteo para guitarra en 1 frase"}',
-  ].join("\n");
-
-  const aiRes = await fetch(`${baseUrl}/v1/chat/completions`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${gatewayToken}`,
-    },
-    body: JSON.stringify({
-      model: status.preferredModel,
-      temperature: 0.8,
-      max_tokens: 350,
-      messages: [
-        {
-          role: "system",
-          content:
-            "Eres un compositor de guitarra acústica e indie en español. Evita rimas cliché. Responde solo JSON puro.",
-        },
-        {
-          role: "user",
-          content: prompt,
-        },
-      ],
-    }),
-  });
-
-  if (!aiRes.ok) {
-    const errBody = await aiRes.text();
-    let parsedErr: Record<string, unknown> | null = null;
-    try {
-      parsedErr = JSON.parse(errBody) as Record<string, unknown>;
-    } catch {
-      parsedErr = null;
-    }
-
-    if (aiRes.status === 402 || aiRes.status === 403) {
-      return c.json(
-        {
-          error: "AI Gateway credits required",
-          unavailableReason:
-            (parsedErr?.unavailable_reason as string | undefined) ?? "paid_plan_required",
-          recoveryUrl:
-            (parsedErr?.recovery_url as string | undefined) ?? status.recoveryUrl,
-        },
-        402,
-      );
-    }
-
-    return c.json(
-      { error: `AI Gateway request failed (${aiRes.status})` },
-      502,
-    );
-  }
-
-  const completion = (await aiRes.json()) as {
-    choices?: Array<{ message?: { content?: string } }>;
-  };
-  const content = completion.choices?.[0]?.message?.content;
-  if (!content) {
-    return c.json({ error: "Empty AI response" }, 502);
-  }
-
-  try {
-    const parsed = extractJsonObject(content);
-    const title = typeof parsed.title === "string" ? parsed.title.trim() : "Idea sin título";
-    const lyrics = typeof parsed.lyrics === "string" ? parsed.lyrics.trim() : "";
-    const strumTip =
-      typeof parsed.strumTip === "string"
-        ? parsed.strumTip.trim()
-        : "Deja respirar el rasgueo marcando el pulso 1 y 3 suavemente.";
-
-    return c.json({
-      model: status.preferredModel,
-      title,
-      lyrics,
-      strumTip,
-    });
-  } catch {
-    return c.json({ error: "Failed to parse AI JSON response" }, 502);
-  }
 });
 
 export default app;

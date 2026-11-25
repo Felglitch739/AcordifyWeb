@@ -26,6 +26,3 @@ export { TiltCard3D } from './TiltCard3D';
 export { AuthModal } from './AuthModal';
 export { AiInspirationPanel } from './AiInspirationPanel';
 export { AcordifyLogo } from './AcordifyLogo';
-export { StyleSwitcher } from './StyleSwitcher';
-export { Op1HardwareDeck } from './workspaces/Op1HardwareDeck';
-export { VinylRecordHero } from './workspaces/VinylRecordHero';

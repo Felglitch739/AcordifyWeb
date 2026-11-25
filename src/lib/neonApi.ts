@@ -7,34 +7,6 @@ const API_BASE_URL =
 
 export const isNeonApiConfigured = API_BASE_URL.length > 0;
 
-export interface AiInspirationPayload {
-  chords: string[];
-  keyRoot: string;
-  mode: 'major' | 'minor';
-  mood: string;
-  bpm: number;
-  theme?: string;
-}
-
-export interface AiInspirationResult {
-  model: string;
-  title: string;
-  lyrics: string;
-  strumTip: string;
-}
-
-export class AiGatewayCreditsError extends Error {
-  unavailableReason: string;
-  recoveryUrl: string | null;
-
-  constructor(message: string, unavailableReason: string, recoveryUrl: string | null) {
-    super(message);
-    this.name = 'AiGatewayCreditsError';
-    this.unavailableReason = unavailableReason;
-    this.recoveryUrl = recoveryUrl;
-  }
-}
-
 async function apiFetch<T>(
   path: string,
   token: string,
@@ -66,22 +38,6 @@ async function apiFetch<T>(
   }
 
   if (!response.ok) {
-    if (response.status === 402 || response.status === 403) {
-      const reason =
-        typeof parsed.unavailableReason === 'string'
-          ? parsed.unavailableReason
-          : 'paid_plan_required';
-      const recoveryUrl =
-        typeof parsed.recoveryUrl === 'string' ? parsed.recoveryUrl : null;
-      if (reason === 'paid_plan_required' || recoveryUrl) {
-        throw new AiGatewayCreditsError(
-          'Neon AI Gateway requiere créditos prepagados activos en tu cuenta.',
-          reason,
-          recoveryUrl,
-        );
-      }
-    }
-
     const msg =
       typeof parsed.error === 'string'
         ? parsed.error
@@ -111,15 +67,5 @@ export async function createCloudProgression(
 export async function deleteCloudProgression(token: string, id: string): Promise<void> {
   await apiFetch<{ deleted: boolean }>(`/progressions/${encodeURIComponent(id)}`, token, {
     method: 'DELETE',
-  });
-}
-
-export async function fetchAiInspiration(
-  token: string,
-  payload: AiInspirationPayload,
-): Promise<AiInspirationResult> {
-  return apiFetch<AiInspirationResult>('/ai/inspiration', token, {
-    method: 'POST',
-    body: JSON.stringify(payload),
   });
 }

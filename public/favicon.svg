@@ -1,43 +1,31 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
   <defs>
-    <linearGradient id="pickGrad" x1="16" y1="10" x2="48" y2="56" gradientUnits="userSpaceOnUse">
-      <stop offset="0%" stop-color="#F2AC63" />
-      <stop offset="55%" stop-color="#E29552" />
-      <stop offset="100%" stop-color="#B9652B" />
-    </linearGradient>
     <clipPath id="pickClip">
       <path d="M32 10C43.5 10 52 15.2 52 24.5C52 36.2 39.2 50.8 33.4 55C32.5 55.6 31.5 55.6 30.6 55C24.8 50.8 12 36.2 12 24.5C12 15.2 20.5 10 32 10Z" />
     </clipPath>
   </defs>
 
-  <!-- Warm Obsidian Rounded Squircle -->
-  <rect x="2" y="2" width="60" height="60" rx="14" fill="#151311" />
-  <rect x="2.75" y="2.75" width="58.5" height="58.5" rx="13.25" stroke="#C69764" stroke-opacity="0.42" stroke-width="1.5" />
+  <rect x="2" y="2" width="60" height="60" rx="14" fill="#111111" />
 
-  <!-- Sculpted Amber-Copper Guitar Pick Silhouette -->
+  <!-- Terracotta Guitar Pick -->
   <path
     d="M32 10C43.5 10 52 15.2 52 24.5C52 36.2 39.2 50.8 33.4 55C32.5 55.6 31.5 55.6 30.6 55C24.8 50.8 12 36.2 12 24.5C12 15.2 20.5 10 32 10Z"
-    fill="url(#pickGrad)"
+    fill="#E85D3D"
   />
 
-  <!-- Crisp Acoustic Soundhole + Clean Strings across Pick -->
   <g clip-path="url(#pickClip)">
-    <circle cx="32" cy="27" r="9.2" fill="#151311" />
-    <circle cx="32" cy="27" r="10.8" stroke="#151311" stroke-opacity="0.32" stroke-width="1.2" />
+    <circle cx="32" cy="27" r="9.2" fill="#111111" />
+    <line x1="10" y1="23.5" x2="54" y2="23.5" stroke="#FFFFFF" stroke-width="1.35" stroke-opacity="0.9" />
+    <line x1="10" y1="27" x2="54" y2="27" stroke="#FFFFFF" stroke-width="1.65" />
+    <line x1="10" y1="30.5" x2="54" y2="30.5" stroke="#FFFFFF" stroke-width="1.2" stroke-opacity="0.85" />
 
-    <!-- 3 Delicate Guitar Strings -->
-    <line x1="10" y1="23.5" x2="54" y2="23.5" stroke="#F5EFE6" stroke-width="1.35" stroke-opacity="0.88" />
-    <line x1="10" y1="27" x2="54" y2="27" stroke="#F5EFE6" stroke-width="1.65" stroke-opacity="0.96" />
-    <line x1="10" y1="30.5" x2="54" y2="30.5" stroke="#F5EFE6" stroke-width="1.2" stroke-opacity="0.82" />
-
-    <!-- Clean Ivory Geometric "A" Bridge Chevron -->
     <path
       d="M25.5 42.5L32 29.5L38.5 42.5"
-      stroke="#FAF5EC"
+      stroke="#FFFFFF"
       stroke-width="2.9"
       stroke-linecap="round"
       stroke-linejoin="round"
     />
-    <line x1="27.8" y1="38.2" x2="36.2" y2="38.2" stroke="#FAF5EC" stroke-width="2.3" stroke-linecap="round" />
+    <line x1="27.8" y1="38.2" x2="36.2" y2="38.2" stroke="#FFFFFF" stroke-width="2.3" stroke-linecap="round" />
   </g>
 </svg>

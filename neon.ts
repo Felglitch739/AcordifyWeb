@@ -3,7 +3,6 @@ import { defineConfig } from "@neon/config/v1";
 export default defineConfig({
   // Declare your Neon services here
   auth: true,
-  aiGateway: true,
   functions: {
     hello: { name: "Hello World", source: "./hello.ts" },
     api: { name: "Acordify API", source: "./functions/api.ts" },

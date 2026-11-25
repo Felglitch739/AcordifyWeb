@@ -14,31 +14,31 @@ export const MOOD_OPTIONS: readonly MoodOption[] = [
   {
     id: 'calm',
     label: 'Tranquilo',
-    description: 'Acordes abiertos que respiran sin prisa.',
+    description: 'Tempo pausado con acordes que dejan espacio al rasgueo.',
     defaultBpm: 76,
   },
   {
     id: 'melancholic',
     label: 'Melancólico',
-    description: 'Giros íntimos y suaves con aire introspectivo.',
+    description: 'Giros menores suaves para tocar despacio.',
     defaultBpm: 72,
   },
   {
     id: 'nostalgic',
     label: 'Nostálgico',
-    description: 'Progresiones cálidas que recuerdan a una canción conocida.',
+    description: 'Vuelta clásica de canción fácil de cantar.',
     defaultBpm: 84,
   },
   {
     id: 'bright',
     label: 'Luminoso',
-    description: 'Brillante, optimista y fácil de cantar encima.',
+    description: 'Progresión abierta y clara para rasgueo constante.',
     defaultBpm: 102,
   },
   {
     id: 'energetic',
     label: 'Enérgico',
-    description: 'Con empuje constante para rasgueos más marcados.',
+    description: 'Pulso más rápido con cambios marcados cada compás.',
     defaultBpm: 118,
   },
 ] as const;
@@ -54,149 +54,149 @@ interface ProgressionTemplate {
 const PROGRESSION_TEMPLATES: readonly ProgressionTemplate[] = [
   // Major templates
   {
-    name: 'Clásica abierta (I–V–vi–IV)',
+    name: 'Vuelta abierta',
     mode: 'major',
     degrees: [1, 5, 6, 4],
     moods: ['bright', 'nostalgic', 'energetic'],
     roleHints: [
-      'Arranca en casa para fijar el tono desde el primer compás.',
-      'Sube la energía y abre el horizonte de la frase.',
-      'Giro emocional que suaviza el recorrido con nostalgia.',
-      'Deja la canción flotando lista para repetir el loop.',
+      'Descanso: fija el tono desde el primer compás.',
+      'Tensión: levanta la frase para cambiar de altura.',
+      'Regreso: pasa por menor para variar la caída.',
+      'Movimiento: enlaza sin corte para repetir la vuelta.',
     ],
   },
   {
-    name: 'Balada cálida (I–vi–IV–V)',
+    name: 'Balada cálida',
     mode: 'major',
     degrees: [1, 6, 4, 5],
     moods: ['calm', 'nostalgic', 'melancholic'],
     roleHints: [
-      'Establece el centro con un pulso tranquilo y claro.',
-      'Cae hacia el lado íntimo sin perder calidez.',
-      'Amplía la armonía y prepara el cierre de la vuelta.',
-      'Crea expectativa justa para volver al inicio.',
+      'Descanso: establece el tono con un pulso estable.',
+      'Regreso: baja al acorde menor manteniendo el mismo color.',
+      'Movimiento: abre el recorrido antes del final.',
+      'Tensión: pide volver al primer acorde al repetir.',
     ],
   },
   {
-    name: 'Agridulce indie (vi–IV–I–V)',
+    name: 'Entrada en menor',
     mode: 'major',
     degrees: [6, 4, 1, 5],
     moods: ['melancholic', 'nostalgic', 'calm'],
     roleHints: [
-      'Empieza desde un color reflexivo en lugar de la tónica.',
-      'Aporta respiro y sensación de avance gradual.',
-      'Ilumina la mitad de la frase al tocar tierra firme.',
-      'Empuja con tensión limpia para reiniciar el ciclo.',
+      'Regreso: empieza en el relativo menor en lugar de la tónica.',
+      'Movimiento: avanza con un paso claro hacia el centro.',
+      'Descanso: resuelve en el acorde principal a mitad de vuelta.',
+      'Tensión: empuja la frase para volver a empezar.',
     ],
   },
   {
-    name: 'Acústica directa (I–IV–V–IV)',
+    name: 'Acústica directa',
     mode: 'major',
     degrees: [1, 4, 5, 4],
     moods: ['bright', 'energetic', 'calm'],
     roleHints: [
-      'Base sólida y luminosa para marcar el ritmo.',
-      'Levanta la frase con movimiento abierto.',
-      'Pico de energía en la tercera parte del compás.',
-      'Relaja un paso antes de volver a empezar.',
+      'Descanso: base directa para marcar el ritmo desde el inicio.',
+      'Movimiento: sube un paso con acordes abiertos.',
+      'Tensión: punto más alto de la vuelta en el tercer compás.',
+      'Movimiento: vuelve al IV para cerrar el ciclo con calma.',
     ],
   },
   {
-    name: 'Indie folk fluido (I–IV–vi–V)',
+    name: 'Folk en cuatro tiempos',
     mode: 'major',
     degrees: [1, 4, 6, 5],
     moods: ['calm', 'bright', 'nostalgic'],
     roleHints: [
-      'Acorde de descanso que invita a entrar sin prisas.',
-      'Abre espacio para la melodía principal.',
-      'Cambia a un matiz más cercano y confesional.',
-      'Impulsa suavemente el regreso al primer acorde.',
+      'Descanso: acorde principal para entrar sin prisa.',
+      'Movimiento: da espacio a la melodía en el segundo compás.',
+      'Regreso: cambia a menor antes del empuje final.',
+      'Tensión: prepara el regreso limpio al acorde I.',
     ],
   },
   {
-    name: 'Impulso ascendente (IV–I–V–vi)',
+    name: 'Paso ascendente',
     mode: 'major',
     degrees: [4, 1, 5, 6],
     moods: ['energetic', 'bright', 'melancholic'],
     roleHints: [
-      'Entra ya en movimiento, como si la historia hubiera empezado.',
-      'Asienta la idea en el segundo compás.',
-      'Sube la tensión antes del giro final.',
-      'Cierra con un matiz emotivo que pide otra vuelta.',
+      'Movimiento: entra en movimiento desde el primer tiempo.',
+      'Descanso: asienta la frase en el segundo compás.',
+      'Tensión: sube un punto antes del acorde final.',
+      'Regreso: cierra en menor para enlazar de nuevo con el IV.',
     ],
   },
 
   // Minor templates
   {
-    name: 'Épica nocturna (i–VI–III–VII)',
+    name: 'Vuelta directa en menor',
     mode: 'minor',
     degrees: [1, 6, 3, 7],
     moods: ['energetic', 'nostalgic', 'melancholic'],
     roleHints: [
-      'Arranca en terreno serio y envolvente.',
-      'Se abre hacia un acorde mayor amplio y cinematográfico.',
-      'Trae un instante de claridad en medio de la noche.',
-      'Da impulso hacia adelante para cerrar el ciclo.',
+      'Descanso: fija la raíz menor como centro de la vuelta.',
+      'Movimiento: cambia a un acorde mayor amplio y claro.',
+      'Movimiento: pasa por el relativo mayor a mitad del ciclo.',
+      'Tensión: da el último impulso antes de regresar al acorde i.',
     ],
   },
   {
-    name: 'Nostalgia acústica (i–iv–VII–III)',
+    name: 'Cadencia menor suave',
     mode: 'minor',
     degrees: [1, 4, 7, 3],
     moods: ['melancholic', 'calm', 'nostalgic'],
     roleHints: [
-      'Acorde principal de descanso en tono menor.',
-      'Profundiza el sentimiento con paso contenido.',
-      'Empuja la frase hacia un cambio luminoso.',
-      'Resuelve en el relativo mayor con alivio suave.',
+      'Descanso: acorde principal para centrar el oído en menor.',
+      'Movimiento: camina en menor manteniendo el ritmo contenido.',
+      'Tensión: prepara el salto hacia el acorde mayor relativo.',
+      'Movimiento: resuelve claro en el III para volver a empezar.',
     ],
   },
   {
-    name: 'Tensión indie (i–VII–VI–VII)',
+    name: 'Pulso rock acústico',
     mode: 'minor',
     degrees: [1, 7, 6, 7],
     moods: ['energetic', 'melancholic', 'bright'],
     roleHints: [
-      'Fija la raíz menor con carácter firme.',
-      'Da un paso atrás con aire de carretera o rock suave.',
-      'Aterriza con peso emocional en el sexto grado.',
-      'Vuelve a subir para lanzarse otra vez al acorde i.',
+      'Descanso: fija la raíz menor como punto de apoyo.',
+      'Tensión: baja un tono en acorde mayor con rasgueo firme.',
+      'Movimiento: pasa por el sexto grado antes de volver a subir.',
+      'Tensión: repite el VII para lanzarse otra vez al acorde i.',
     ],
   },
   {
-    name: 'Íntima y serena (i–iv–v–i)',
+    name: 'Cuatro pasos en calma',
     mode: 'minor',
     degrees: [1, 4, 5, 1],
     moods: ['calm', 'melancholic'],
     roleHints: [
-      'Presenta la idea en calma total.',
-      'Camina un peldaño abajo manteniendo la intimidad.',
-      'Prepara el regreso sin estridencias ni dureza.',
-      'Vuelve a casa para descansar al final del loop.',
+      'Descanso: presenta el tono menor desde el primer compás.',
+      'Movimiento: sostiene el pulso sin saltos bruscos.',
+      'Regreso: prepara el cierre suave en el quinto grado menor.',
+      'Descanso: vuelve al acorde principal para cerrar la vuelta.',
     ],
   },
   {
-    name: 'Luz entre nubes (VI–VII–i–III)',
+    name: 'Giro abierto en menor',
     mode: 'minor',
     degrees: [6, 7, 1, 3],
     moods: ['bright', 'nostalgic', 'energetic'],
     roleHints: [
-      'Comienza con amplitud y optimismo contenido.',
-      'Toma impulso hacia el centro de la canción.',
-      'Asienta la raíz menor con firmeza.',
-      'Cierra abriendo aire hacia el acorde mayor relativo.',
+      'Movimiento: arranca en mayor para abrir el compás.',
+      'Tensión: sube un paso rumbo al acorde principal menor.',
+      'Descanso: aterriza en el acorde i en el tercer compás.',
+      'Movimiento: cierra hacia el III para reiniciar el loop.',
     ],
   },
   {
-    name: 'Paseo de lluvia (i–III–VII–iv)',
+    name: 'Caminata acústica',
     mode: 'minor',
     degrees: [1, 3, 7, 4],
     moods: ['calm', 'nostalgic', 'bright'],
     roleHints: [
-      'Tono base sereno para empezar a rasguear.',
-      'Ilumina la progresión con el tercer grado mayor.',
-      'Mantiene el ritmo vivo rumbo al cierre.',
-      'Termina con un suspiro suave que enlaza al inicio.',
+      'Descanso: punto de partida tranquilo sobre la raíz menor.',
+      'Movimiento: aclara el compás con el relativo mayor.',
+      'Tensión: mantiene vivo el avance rumbo al cuarto compás.',
+      'Movimiento: cierra en iv para volver al acorde inicial.',
     ],
   },
 ];
@@ -228,7 +228,7 @@ export function buildProgressionFromDegrees(
   mode: Mode,
   mood: MoodId,
   degrees: readonly number[],
-  templateName = 'Progresión personalizada',
+  templateName = 'Progresión ajustada',
   roleHints?: readonly string[],
 ): GeneratedProgression {
   const diatonic = getDiatonicChords(keyRoot, mode);
@@ -290,25 +290,25 @@ function describeReplacementMoodEffect(
   slotIndex: number,
 ): string {
   if (candidate.quality === 'dim') {
-    return 'Añade tensión pasajera e inestable; úsalo como puente corto hacia el siguiente acorde.';
+    return 'Añade tensión corta de paso; úsalo como puente hacia el siguiente acorde.';
   }
 
   if (mode === 'major') {
     switch (candidate.degree) {
       case 1:
         return slotIndex === 3
-          ? 'Resuelve el final en casa para que la vuelta suene más cerrada.'
-          : 'Aterriza en descanso total y da mucha estabilidad.';
+          ? 'Cierra la vuelta en el acorde principal para darle un final estable.'
+          : 'Mantiene el compás en descanso con mucha estabilidad.';
       case 2:
-        return 'Cambia hacia un tono menor suave y reflexivo que prepara bien el V.';
+        return 'Introduce un acorde menor suave que prepara bien la tensión del V.';
       case 3:
-        return 'Vuelve el paso más íntimo, melancólico y delicado.';
+        return 'Cambia hacia un color menor discreto sin salirte de la escala.';
       case 4:
-        return 'Abre la armonía con un color cálido, luminoso y amplio.';
+        return 'Abre la progresión con un acorde mayor amplio y fácil de cantar.';
       case 5:
-        return 'Suma empuje y tensión clara para pedir el regreso al inicio.';
+        return 'Agrega tensión clara para pedir el regreso al acorde principal.';
       case 6:
-        return 'Agrega nostalgia o emoción contenida sin salirte del tono.';
+        return 'Cambia el paso a menor y vuelve la vuelta más íntima.';
       default:
         return candidate.explanation;
     }
@@ -316,17 +316,17 @@ function describeReplacementMoodEffect(
 
   switch (candidate.degree) {
     case 1:
-      return 'Ancla el compás en el centro oscuro y sereno del tono menor.';
+      return 'Vuelve al acorde principal menor para asentar el compás.';
     case 3:
-      return 'Mete un rayo de luz mayor y alivio instantáneo en la frase.';
+      return 'Aclara el compás con el acorde mayor relativo del tono.';
     case 4:
-      return 'Profundiza la nostalgia con un color menor más denso.';
+      return 'Sostiene el pulso menor un paso antes del regreso.';
     case 5:
-      return 'Suaviza el retorno sin la dureza de un acorde tenso.';
+      return 'Suaviza la vuelta al primer acorde sin demasiada tensión.';
     case 6:
-      return 'Da amplitud cinematográfica y levanta la emoción del compás.';
+      return 'Abre la frase en mayor para contrastar con los acordes menores.';
     case 7:
-      return 'Aporta impulso abierto estilo rock acústico o indie.';
+      return 'Marca un empujón en mayor antes de regresar al acorde i.';
     default:
       return candidate.explanation;
   }
@@ -348,14 +348,12 @@ export function getReplacementSuggestions(
   const scored = candidates.map((chord) => {
     let score = 0;
 
-    // Prefer usable major/minor triads before diminished chords
     if (chord.quality === 'dim') {
       score -= 100;
     } else {
       score += 20;
     }
 
-    // Avoid immediate adjacent duplicates when possible
     const repeatsNeighbor = chord.degree === prevDegree || chord.degree === nextDegree;
     if (!repeatsNeighbor) {
       score += 15;
@@ -363,7 +361,6 @@ export function getReplacementSuggestions(
       score -= 15;
     }
 
-    // Slot-specific musical fit
     if (slotIndex === 0 && (chord.harmonicFunction === 'rest' || chord.degree === 6 || chord.degree === 4)) {
       score += 10;
     } else if (slotIndex === 3 && (chord.harmonicFunction === 'tension' || chord.harmonicFunction === 'return' || chord.degree === 4)) {

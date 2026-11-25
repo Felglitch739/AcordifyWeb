@@ -1,0 +1,57 @@
+/* ─────────────────────────────────────────────────────────────────────────────
+   Acordify v2 — Single Source of Truth Design Tokens
+   Monochrome Editorial Base + Single Terracotta Active Accent
+   ────────────────────────────────────────────────────────────────────────── */
+
+:root {
+  /* Palette */
+  --color-bg: #F4F4F5;
+  --color-surface: #FFFFFF;
+  --color-surface-subtle: #ECECEF;
+  --color-surface-board: #FAFAFA;
+  --color-ink: #111111;
+  --color-ink-secondary: #52525B;
+  --color-ink-muted: #71717A;
+  --color-border: #E4E4E7;
+  --color-border-strong: #111111;
+
+  /* Single Semantic Active Accent */
+  --color-accent: #E85D3D;
+  --color-accent-tint: rgba(232, 93, 61, 0.08);
+  --color-accent-border: rgba(232, 93, 61, 0.42);
+  --color-accent-ink: #FFFFFF;
+
+  /* Tuner Lock & Overlay Backdrop */
+  --color-ok: #15803D;
+  --color-backdrop: rgba(17, 17, 17, 0.42);
+
+  /* Typography */
+  --font-sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+  --font-editorial: 'Instrument Serif', Georgia, serif;
+
+  /* Radii & Spacing */
+  --radius-card: 16px;
+  --radius-inner: 12px;
+  --radius-pill: 9999px;
+  --space-1: 8px;
+  --space-2: 16px;
+  --space-3: 24px;
+  --space-4: 32px;
+  --space-6: 48px;
+  --space-8: 64px;
+  --container-max: 1160px;
+
+  /* Legacy Alias Tokens (preserved cleanly for secondary/test files) */
+  --bg-primary: var(--color-bg);
+  --bg-secondary: var(--color-surface);
+  --bg-tertiary: var(--color-surface-subtle);
+  --accent-primary: var(--color-accent);
+  --accent-secondary: var(--color-ink);
+  --text-primary: var(--color-ink);
+  --text-secondary: var(--color-ink-secondary);
+  --text-muted: var(--color-ink-muted);
+  --border-color: var(--color-border);
+  --status-active: var(--color-ok);
+  --mood-accent: var(--color-accent);
+}

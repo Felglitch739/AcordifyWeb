@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { BookMarked, LogOut, SlidersHorizontal, User } from 'lucide-react';
+import { BookMarked, SlidersHorizontal } from 'lucide-react';
 import {
   useProgressionPlayer,
   type GuitarTone,
@@ -10,14 +10,11 @@ import {
   AiInspirationPanel,
   AuthModal,
   KeyMoodPicker,
-  Op1HardwareDeck,
   ProgressionStrip,
   SavedProgressionsDrawer,
-  StyleSwitcher,
   ToastContainer,
   TransportBar,
   TunerPanel,
-  VinylRecordHero,
 } from './components';
 import { useToast } from './hooks/useToast';
 import {
@@ -40,13 +37,6 @@ import {
   saveProgression,
   type SavedProgression,
 } from './storage';
-import { StudioStyleProvider } from './styles/StudioStyleContext';
-import {
-  STUDIO_THEMES,
-  persistStudioTheme,
-  readInitialStudioTheme,
-  type StudioThemeId,
-} from './styles/studioThemes';
 import {
   MAJOR_KEYS,
   MINOR_KEYS,
@@ -126,7 +116,6 @@ function createInitialState(): { progression: GeneratedProgression; bpm: number 
 
 function App() {
   const [initial] = useState(createInitialState);
-  const [studioStyle, setStudioStyleState] = useState<StudioThemeId>(readInitialStudioTheme);
   const [progression, setProgression] = useState<GeneratedProgression>(initial.progression);
   const [variantIndex, setVariantIndex] = useState(0);
   const [bpm, setBpm] = useState(initial.bpm);
@@ -145,22 +134,6 @@ function App() {
   const toast = useToast();
   const chordSymbols = progression.slots.map((slot) => slot.chord.symbol);
   const isCloudMode = Boolean(authUser && isNeonApiConfigured);
-
-  const handleChangeStudioStyle = (nextStyle: StudioThemeId) => {
-    setStudioStyleState(nextStyle);
-    persistStudioTheme(nextStyle);
-  };
-
-  // Sync browser colorScheme & meta theme-color with active world
-  useEffect(() => {
-    const themeMeta = STUDIO_THEMES.find((t) => t.id === studioStyle);
-    if (!themeMeta) return;
-    document.documentElement.style.colorScheme = themeMeta.isDark ? 'dark' : 'light';
-    const metaTag = document.querySelector('meta[name="theme-color"]');
-    if (metaTag) {
-      metaTag.setAttribute('content', themeMeta.themeColor);
-    }
-  }, [studioStyle]);
 
   useEffect(() => {
     let cancelled = false;
@@ -199,7 +172,7 @@ function App() {
     strumPattern,
   });
 
-  // Global keyboard shortcuts: Space to Play/Stop loop, Escape to close chord editor
+  // Global keyboard shortcuts: Space toggles Play/Stop loop, Escape closes chord editor
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.code === 'Space' && !e.metaKey && !e.ctrlKey && !e.altKey) {
@@ -420,263 +393,127 @@ function App() {
     progression.mode === 'major' ? 'Mayor' : 'Menor'
   } · ${moodLabel}`;
 
-  const isVinyl = studioStyle === 'vinyl';
-  const isApple = studioStyle === 'apple';
-  const isOp1 = studioStyle === 'op1';
-
-  const wordmarkClass = isVinyl
-    ? 'font-poster font-extrabold sm:uppercase tracking-tight'
-    : isOp1
-      ? 'font-hardware font-bold tracking-tight'
-      : isApple
-        ? 'font-semibold tracking-[-0.03em]'
-        : 'font-serif-editorial font-normal';
-
-  const headerBtnClass = isVinyl
-    ? 'inline-flex items-center gap-1 sm:gap-1.5 rounded border-2 border-[#141210] bg-[#FFFDF7] px-2 sm:px-3 py-1 sm:py-1.5 text-[11px] sm:text-xs font-mono font-bold text-[#141210] hover:bg-[#D4F350] transition cursor-pointer whitespace-nowrap'
-    : isApple
-      ? 'inline-flex items-center gap-1 sm:gap-1.5 rounded-full border border-black/[0.08] bg-white/80 px-2.5 sm:px-3 py-1 sm:py-1.5 text-[11px] sm:text-xs font-medium text-[#1D1D1F] hover:bg-white shadow-sm transition cursor-pointer whitespace-nowrap'
-      : isOp1
-        ? 'op1-keycap inline-flex items-center gap-1 sm:gap-1.5 rounded-xl px-2 sm:px-3 py-1 sm:py-1.5 text-[11px] sm:text-xs font-mono font-semibold text-[#18191B] cursor-pointer whitespace-nowrap'
-        : 'inline-flex items-center gap-1 sm:gap-1.5 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] px-2 sm:px-3 py-1 sm:py-1.5 text-[11px] sm:text-xs font-medium text-[var(--text-primary)] hover:border-[var(--border-strong)] hover:bg-[var(--bg-surface-elevated)] transition cursor-pointer whitespace-nowrap';
-
   return (
-    <StudioStyleProvider studioStyle={studioStyle} setStudioStyle={handleChangeStudioStyle}>
-      <div
-        data-studio={studioStyle}
-        data-mood={progression.mood}
-        className={`studio-world-${studioStyle} relative min-h-screen text-[var(--text-primary)] flex flex-col overflow-x-hidden`}
-      >
-        {(studioStyle === 'luthier' || isVinyl) && (
-          <div aria-hidden="true" className="studio-grain" />
-        )}
+    <div className="min-h-screen bg-[var(--color-bg)] text-[var(--color-ink)] flex flex-col">
+      {authClient && (
+        <NeonSessionBridge client={authClient} onUserChange={setAuthUser} />
+      )}
 
-        {authClient && (
-          <NeonSessionBridge client={authClient} onUserChange={setAuthUser} />
-        )}
-
-        {/* Adaptive 60px Sticky Header */}
-        <header
-          className={`sticky top-0 z-30 h-[58px] sm:h-[60px] backdrop-blur-xl ${
-            isVinyl
-              ? 'border-b-2 border-[#141210] bg-[var(--header-bg)]'
-              : 'border-b border-[var(--border-subtle)] bg-[var(--header-bg)]'
-          }`}
-        >
-          <div className="mx-auto max-w-6xl h-full px-3 sm:px-6 flex items-center justify-between gap-2 sm:gap-4">
-            <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
-              <AcordifyLogo size={28} theme={studioStyle} className="sm:w-8 sm:h-8" />
-              <div className="flex items-baseline gap-2.5">
-                <h1
-                  className={`${
-                    isVinyl ? 'text-base sm:text-xl' : 'text-lg sm:text-2xl'
-                  } text-[var(--text-primary)] leading-none whitespace-nowrap ${wordmarkClass}`}
-                >
-                  Acordify
-                </h1>
-                <span className="hidden lg:inline-block xl:hidden text-xs text-[var(--text-muted)]">
-                  Estudio acústico
-                </span>
-              </div>
-            </div>
-
-            {/* Desktop Inline 4-Style Switcher */}
-            <div className="hidden xl:flex items-center justify-center">
-              <StyleSwitcher />
-            </div>
-
-            <div className="flex items-center gap-1 sm:gap-2 shrink-0">
-              <button
-                type="button"
-                onClick={handleOpenTuner}
-                aria-label="Afinador"
-                className={headerBtnClass}
-              >
-                <SlidersHorizontal className="w-3.5 h-3.5 text-[var(--mood-accent)] shrink-0" />
-                <span className="sm:hidden">Afinar</span>
-                <span className="hidden sm:inline">Afinador</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setSavedOpen(true)}
-                aria-label="Libreta de progresiones guardadas"
-                className={headerBtnClass}
-              >
-                <BookMarked className="w-3.5 h-3.5 text-[var(--text-secondary)] shrink-0" />
-                <span className="hidden sm:inline">Libreta</span>
-                <span className="rounded-full bg-[var(--bg-recessed)] border border-[var(--border-subtle)] px-1.5 py-0.5 font-mono text-[10px] text-[var(--mood-accent)] num-tabular leading-none">
-                  {savedItems.length}
-                </span>
-              </button>
-
-              {isNeonAuthConfigured && (
-                authUser ? (
-                  <div className="flex items-center gap-1.5">
-                    <span className="hidden sm:inline-flex items-center gap-1.5 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] px-2.5 py-1.5 text-xs text-[var(--text-secondary)] max-w-[150px] truncate">
-                      <User className="w-3.5 h-3.5 text-[var(--mood-accent)] shrink-0" />
-                      <span className="truncate">{authUser.name || authUser.email}</span>
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => void handleSignOut()}
-                      title="Cerrar sesión"
-                      className={headerBtnClass}
-                    >
-                      <LogOut className="w-3.5 h-3.5" />
-                      <span className="hidden sm:inline">Salir</span>
-                    </button>
-                  </div>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => setAuthModalOpen(true)}
-                    className={`px-2.5 sm:px-3.5 py-1 sm:py-1.5 text-[11px] sm:text-xs font-semibold transition cursor-pointer whitespace-nowrap ${
-                      isVinyl
-                        ? 'rounded border-2 border-[#141210] bg-[var(--mood-accent)] text-[var(--accent-ink)] font-mono uppercase'
-                        : isApple
-                          ? 'rounded-full bg-[var(--mood-accent)] text-[var(--accent-ink)] shadow-sm hover:brightness-110'
-                          : 'rounded-xl border border-[var(--mood-border)] bg-[var(--mood-tint)] text-[var(--mood-accent)] hover:brightness-110'
-                    }`}
-                  >
-                    <span className="sm:hidden">Entrar</span>
-                    <span className="hidden sm:inline">Iniciar sesión</span>
-                  </button>
-                )
-              )}
-            </div>
-          </div>
-        </header>
-
-        {/* Responsive Style Switcher Ribbon (< xl viewports) */}
-        <div className="xl:hidden relative z-20 border-b border-[var(--border-subtle)] bg-[var(--header-bg)]/80 backdrop-blur-md">
-          <div className="mx-auto max-w-6xl px-3 sm:px-6 py-2 flex items-center justify-between gap-2 overflow-x-auto">
-            <span className="text-[11px] font-mono uppercase tracking-wider text-[var(--text-muted)] shrink-0 hidden sm:inline">
-              Estilo UI:
+      {/* Clean 64px Monochrome Header (no login button clutter) */}
+      <header className="sticky top-0 z-30 h-16 border-b border-[var(--color-border)] bg-[var(--color-bg)]/95 backdrop-blur-md">
+        <div className="mx-auto max-w-[1160px] h-full px-4 sm:px-8 flex items-center justify-between gap-4">
+          <div className="flex items-center gap-2.5">
+            <AcordifyLogo size={28} />
+            <span className="text-lg font-medium tracking-[-0.02em] text-[var(--color-ink)]">
+              Acordify
             </span>
-            <div className="mx-auto sm:mx-0">
-              <StyleSwitcher compact />
-            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handleOpenTuner}
+              className="btn-secondary bg-[var(--color-surface)] px-3.5 py-1.5 text-xs"
+            >
+              <SlidersHorizontal className="w-3.5 h-3.5" />
+              <span>Afinador</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setSavedOpen(true)}
+              className="btn-secondary bg-[var(--color-surface)] px-3.5 py-1.5 text-xs"
+            >
+              <BookMarked className="w-3.5 h-3.5" />
+              <span>Libreta</span>
+              <span className="rounded-full bg-[var(--color-surface-subtle)] px-1.5 py-0.5 font-mono text-[11px] text-[var(--color-ink)] num-tabular leading-none">
+                {savedItems.length}
+              </span>
+            </button>
           </div>
         </div>
+      </header>
 
-        {/* Main Adaptive Studio Workspace */}
-        <main className="relative z-10 mx-auto w-full max-w-6xl flex-1 px-4 sm:px-6 pt-6 pb-10 space-y-6">
-          {studioStyle === 'op1' ? (
-            <Op1HardwareDeck
-              progression={progression}
-              bpm={bpm}
-              isPlaying={player.isPlaying}
-              activeChordIndex={player.activeChordIndex}
-              activeBeat={player.activeBeat}
-              guitarTone={guitarTone}
-              strumPattern={strumPattern}
-              onSelectMode={handleSelectMode}
-              onSelectKey={handleSelectKey}
-              onSelectMood={handleSelectMood}
-              onNextVariant={handleNextVariant}
-              onChangeBpm={setBpm}
-              onChangeGuitarTone={setGuitarTone}
-              onChangeStrumPattern={setStrumPattern}
-            />
-          ) : studioStyle === 'vinyl' ? (
-            <VinylRecordHero
-              progression={progression}
-              bpm={bpm}
-              isPlaying={player.isPlaying}
-              guitarTone={guitarTone}
-              strumPattern={strumPattern}
-              onSelectMode={handleSelectMode}
-              onSelectKey={handleSelectKey}
-              onSelectMood={handleSelectMood}
-              onNextVariant={handleNextVariant}
-              onTogglePlay={() => void player.toggle()}
-              onChangeGuitarTone={setGuitarTone}
-              onChangeStrumPattern={setStrumPattern}
-            />
-          ) : (
-            <KeyMoodPicker
-              keyRoot={progression.keyRoot}
-              mode={progression.mode}
-              mood={progression.mood}
-              templateName={progression.templateName}
-              scaleNotes={progression.scaleNotes}
-              guitarTone={guitarTone}
-              strumPattern={strumPattern}
-              onSelectMode={handleSelectMode}
-              onSelectKey={handleSelectKey}
-              onSelectMood={handleSelectMood}
-              onNextVariant={handleNextVariant}
-              onChangeGuitarTone={setGuitarTone}
-              onChangeStrumPattern={setStrumPattern}
-            />
-          )}
-
-          <ProgressionStrip
-            progression={progression}
-            activeChordIndex={player.activeChordIndex}
-            activeBeat={player.activeBeat}
-            editingSlotIndex={editingSlotIndex}
-            onToggleEditSlot={handleToggleEditSlot}
-            onReplaceChord={handleReplaceChord}
-            onPreviewChord={(symbol) => void player.previewChord(symbol)}
-            onPluckNote={(noteName) => void player.previewNote(noteName)}
-          />
-
-          <TransportBar
-            isPlaying={player.isPlaying}
-            bpm={bpm}
-            activeBeat={player.activeBeat}
-            countInBeat={player.countInBeat}
-            metronomeEnabled={metronomeEnabled}
-            countInEnabled={countInEnabled}
-            defaultSaveName={defaultSaveName}
-            audioMode={player.audioMode}
-            onTogglePlay={() => void player.toggle()}
-            onChangeBpm={setBpm}
-            onToggleMetronome={() => setMetronomeEnabled((v) => !v)}
-            onToggleCountIn={() => setCountInEnabled((v) => !v)}
-            onShare={() => void handleShare()}
-            onSave={(name) => void handleSave(name)}
-          />
-
-          <AiInspirationPanel
-            chords={chordSymbols}
-            keyRoot={progression.keyRoot}
-            mode={progression.mode}
-            mood={progression.mood}
-            bpm={bpm}
-            isSignedIn={Boolean(authUser)}
-            onOpenAuth={() => setAuthModalOpen(true)}
-            onErrorToast={(msg) => toast.addToast('error', msg)}
-          />
-        </main>
-
-        <footer className="relative z-10 border-t border-[var(--border-subtle)] py-4 px-4 sm:px-6 text-center text-xs text-[var(--text-muted)]">
-          Acordify · Guitarra acústica real, afinador y libreta sincronizada con Neon.
-        </footer>
-
-        <TunerPanel
-          isOpen={tunerOpen}
-          onClose={() => setTunerOpen(false)}
-          onPlayReferenceNote={(noteName) => void player.previewNote(noteName)}
+      {/* Main Generous-Breathing Single Flow */}
+      <main className="mx-auto w-full max-w-[1160px] flex-1 px-4 sm:px-8 py-8 sm:py-12 space-y-8">
+        <KeyMoodPicker
+          progression={progression}
+          guitarTone={guitarTone}
+          strumPattern={strumPattern}
+          onSelectMode={handleSelectMode}
+          onSelectKey={handleSelectKey}
+          onSelectMood={handleSelectMood}
+          onNextVariant={handleNextVariant}
+          onChangeGuitarTone={setGuitarTone}
+          onChangeStrumPattern={setStrumPattern}
         />
-        <SavedProgressionsDrawer
-          isOpen={savedOpen}
-          items={savedItems}
-          storageMode={isCloudMode ? 'cloud' : 'local'}
-          onClose={() => setSavedOpen(false)}
-          onLoad={handleLoadSaved}
-          onDelete={(id) => void handleDeleteSaved(id)}
+
+        <ProgressionStrip
+          progression={progression}
+          activeChordIndex={player.activeChordIndex}
+          activeBeat={player.activeBeat}
+          editingSlotIndex={editingSlotIndex}
+          onToggleEditSlot={handleToggleEditSlot}
+          onReplaceChord={handleReplaceChord}
+          onPreviewChord={(symbol) => void player.previewChord(symbol)}
+          onPluckNote={(noteName) => void player.previewNote(noteName)}
         />
-        <AuthModal
-          isOpen={authModalOpen}
-          onClose={() => setAuthModalOpen(false)}
-          onAuthSuccess={() => toast.addToast('success', 'Sesión iniciada')}
+
+        <TransportBar
+          isPlaying={player.isPlaying}
+          bpm={bpm}
+          activeBeat={player.activeBeat}
+          countInBeat={player.countInBeat}
+          metronomeEnabled={metronomeEnabled}
+          countInEnabled={countInEnabled}
+          defaultSaveName={defaultSaveName}
+          onTogglePlay={() => void player.toggle()}
+          onChangeBpm={setBpm}
+          onToggleMetronome={() => setMetronomeEnabled((v) => !v)}
+          onToggleCountIn={() => setCountInEnabled((v) => !v)}
+          onShare={() => void handleShare()}
+          onSave={(name) => void handleSave(name)}
         />
-        <ToastContainer toasts={toast.toasts} onDismiss={toast.removeToast} />
-      </div>
-    </StudioStyleProvider>
+
+        <AiInspirationPanel
+          chords={chordSymbols}
+          degrees={progression.degrees}
+          keyRoot={progression.keyRoot}
+          mode={progression.mode}
+          mood={progression.mood}
+          bpm={bpm}
+          strumPattern={strumPattern}
+        />
+      </main>
+
+      <footer className="border-t border-[var(--color-border)] py-5 px-4 sm:px-8 text-center text-xs text-[var(--color-ink-muted)]">
+        Acordify · Teoría, guitarra acústica y afinador directo en tu navegador.
+      </footer>
+
+      <TunerPanel
+        isOpen={tunerOpen}
+        onClose={() => setTunerOpen(false)}
+        onPlayReferenceNote={(noteName) => void player.previewNote(noteName)}
+      />
+      <SavedProgressionsDrawer
+        isOpen={savedOpen}
+        items={savedItems}
+        storageMode={isCloudMode ? 'cloud' : 'local'}
+        isAuthConfigured={isNeonAuthConfigured}
+        authUser={authUser}
+        onOpenAuth={() => setAuthModalOpen(true)}
+        onSignOut={() => void handleSignOut()}
+        onClose={() => setSavedOpen(false)}
+        onLoad={handleLoadSaved}
+        onDelete={(id) => void handleDeleteSaved(id)}
+      />
+      <AuthModal
+        isOpen={authModalOpen}
+        onClose={() => setAuthModalOpen(false)}
+        onAuthSuccess={() => toast.addToast('success', 'Sesión iniciada')}
+      />
+      <ToastContainer toasts={toast.toasts} onDismiss={toast.removeToast} />
+    </div>
   );
 }
 
