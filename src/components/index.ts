@@ -28,3 +28,4 @@ export { AiInspirationPanel } from './AiInspirationPanel';
 export { AcordifyLogo } from './AcordifyLogo';
 export { CircleOfFifthsView } from './CircleOfFifthsView';
 export { ScalePracticeView } from './ScalePracticeView';
+export { LandingPage } from './LandingPage';

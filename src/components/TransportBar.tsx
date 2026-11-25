@@ -188,8 +188,8 @@ export const TransportBar: React.FC<TransportBarProps> = ({
               )}
             </div>
 
-            {/* Tempo Fader + Tap */}
-            <div className="flex items-center gap-1.5 rounded-full border border-[var(--color-border)] bg-[var(--color-surface-board)] px-2.5 py-1">
+            {/* Tempo Fader + Numeric Input + Tap */}
+            <div className="flex flex-wrap items-center gap-1.5 rounded-full border border-[var(--color-border)] bg-[var(--color-surface-board)] px-2.5 py-1">
               <button
                 type="button"
                 onClick={() => nudgeBpm(-5)}
@@ -207,7 +207,7 @@ export const TransportBar: React.FC<TransportBarProps> = ({
                 value={bpm}
                 onChange={(e) => onChangeBpm(Number(e.target.value))}
                 aria-label="Tempo en BPM"
-                className="studio-slider w-28 sm:w-32"
+                className="studio-slider w-[220px] max-w-[54vw]"
               />
               <button
                 type="button"
@@ -217,9 +217,24 @@ export const TransportBar: React.FC<TransportBarProps> = ({
               >
                 +5
               </button>
-              <span className="font-mono text-xs font-medium text-[var(--color-ink)] num-tabular pl-1.5 border-l border-[var(--color-border)] whitespace-nowrap">
-                {bpm} <span className="text-[var(--color-ink-muted)]">BPM</span>
-              </span>
+              <div className="flex items-center gap-1 pl-1.5 border-l border-[var(--color-border)]">
+                <input
+                  id="bpm-number-input"
+                  type="number"
+                  min={50}
+                  max={160}
+                  value={bpm}
+                  aria-label="Escribir BPM"
+                  onChange={(e) => {
+                    const parsed = Number(e.target.value);
+                    if (Number.isFinite(parsed) && parsed > 0) {
+                      onChangeBpm(Math.max(50, Math.min(160, Math.round(parsed))));
+                    }
+                  }}
+                  className="w-11 bg-transparent text-center font-mono text-xs font-medium text-[var(--color-ink)] num-tabular focus:outline-none"
+                />
+                <span className="font-mono text-[11px] text-[var(--color-ink-muted)]">BPM</span>
+              </div>
               <button
                 type="button"
                 onClick={handleTapTempo}

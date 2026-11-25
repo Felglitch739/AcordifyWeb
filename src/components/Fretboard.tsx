@@ -56,8 +56,8 @@ export const Fretboard: React.FC<FretboardProps> = ({
   const rootSet = new Set(rootStrings ?? []);
 
   return (
-    <div className="flex flex-col items-center select-none w-full max-w-[206px]">
-      <svg viewBox="-22 -2 132 152" className="w-full h-auto overflow-visible">
+    <div className="flex flex-col items-center select-none w-full max-w-[240px]">
+      <svg viewBox="-14 -2 116 152" className="w-full h-auto overflow-visible">
         <rect
           id={boardId}
           x="8"

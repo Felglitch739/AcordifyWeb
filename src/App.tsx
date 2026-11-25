@@ -12,6 +12,7 @@ import {
   AuthModal,
   CircleOfFifthsView,
   KeyMoodPicker,
+  LandingPage,
   ProgressionStrip,
   SavedProgressionsDrawer,
   ScalePracticeView,
@@ -94,6 +95,7 @@ function resolveKeyForMode(currentRoot: string, nextMode: Mode): string {
 }
 
 type SuiteSection = 'progressions' | 'circle' | 'scales';
+type AppSurface = 'landing' | 'studio';
 
 const SUITE_TABS: readonly { id: SuiteSection; label: string; hash: string }[] = [
   { id: 'progressions', label: 'Progresiones', hash: '#progresiones' },
@@ -107,6 +109,22 @@ function resolveInitialSection(): SuiteSection {
   if (hash === '#circulo') return 'circle';
   if (hash === '#escalas') return 'scales';
   return 'progressions';
+}
+
+function resolveInitialSurface(): AppSurface {
+  if (typeof window === 'undefined') return 'landing';
+  const pathname = window.location.pathname.toLowerCase();
+  if (pathname.startsWith('/practicar') || pathname.startsWith('/app')) {
+    return 'studio';
+  }
+  if (decodeProgressionFromQuery(window.location.search) !== null) {
+    return 'studio';
+  }
+  const hash = window.location.hash.toLowerCase();
+  if (hash === '#progresiones' || hash === '#circulo' || hash === '#escalas') {
+    return 'studio';
+  }
+  return 'landing';
 }
 
 function createInitialState(): { progression: GeneratedProgression; bpm: number } {
@@ -135,6 +153,7 @@ function createInitialState(): { progression: GeneratedProgression; bpm: number 
 
 function App() {
   const [initial] = useState(createInitialState);
+  const [surface, setSurface] = useState<AppSurface>(resolveInitialSurface);
   const [activeSection, setActiveSection] = useState<SuiteSection>(resolveInitialSection);
   const [progression, setProgression] = useState<GeneratedProgression>(initial.progression);
   const [variantIndex, setVariantIndex] = useState(0);
@@ -192,11 +211,11 @@ function App() {
     strumPattern,
   });
 
-  // Global keyboard shortcuts: Space toggles Play/Stop loop, Escape closes chord editor
+  // Global keyboard shortcuts: Space toggles Play/Stop loop in Studio, Escape closes chord editor
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.code === 'Space' && !e.metaKey && !e.ctrlKey && !e.altKey) {
-        if (tunerOpen || savedOpen || authModalOpen) return;
+        if (surface !== 'studio' || tunerOpen || savedOpen || authModalOpen) return;
         const target = e.target as HTMLElement | null;
         const tag = target?.tagName?.toUpperCase();
         if (
@@ -223,7 +242,16 @@ function App() {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [player, tunerOpen, savedOpen, authModalOpen, editingSlotIndex]);
+  }, [player, surface, tunerOpen, savedOpen, authModalOpen, editingSlotIndex]);
+
+  useEffect(() => {
+    const onPopState = () => {
+      setSurface(resolveInitialSurface());
+      setActiveSection(resolveInitialSection());
+    };
+    window.addEventListener('popstate', onPopState);
+    return () => window.removeEventListener('popstate', onPopState);
+  }, []);
 
   const moodLabel =
     MOOD_OPTIONS.find((m) => m.id === progression.mood)?.label ?? progression.mood;
@@ -301,9 +329,9 @@ function App() {
       degrees: progression.degrees,
     });
 
-    const shareUrl = `${window.location.origin}${window.location.pathname}${query}`;
+    const shareUrl = `${window.location.origin}/practicar${query}`;
     try {
-      window.history.replaceState(null, '', query);
+      window.history.replaceState(null, '', `/practicar${query}`);
     } catch {
       // Ignore history restriction in non-browser contexts
     }
@@ -441,6 +469,48 @@ function App() {
     );
   };
 
+  const handleEnterStudio = (
+    initialSection: SuiteSection = 'progressions',
+    preset?: { keyRoot: string; mode: Mode },
+  ) => {
+    if (player.isPlaying) {
+      player.stop();
+    }
+    if (preset) {
+      const nextProg = generateProgression(preset.keyRoot, preset.mode, progression.mood, 0);
+      setVariantIndex(0);
+      setEditingSlotIndex(null);
+      setProgression(nextProg);
+      setBpm(nextProg.suggestedBpm);
+    }
+    setActiveSection(initialSection);
+    setSurface('studio');
+    const targetTab = SUITE_TABS.find((t) => t.id === initialSection);
+    if (typeof window !== 'undefined') {
+      try {
+        window.history.pushState(null, '', `/practicar${targetTab?.hash ?? '#progresiones'}`);
+        window.scrollTo({ top: 0 });
+      } catch {
+        // Ignore history restriction
+      }
+    }
+  };
+
+  const handleGoToLanding = () => {
+    if (player.isPlaying) {
+      player.stop();
+    }
+    setSurface('landing');
+    if (typeof window !== 'undefined') {
+      try {
+        window.history.pushState(null, '', '/');
+        window.scrollTo({ top: 0 });
+      } catch {
+        // Ignore history restriction
+      }
+    }
+  };
+
   const handleSignOut = async () => {
     if (!authClient) return;
     await authClient.signOut();
@@ -455,269 +525,289 @@ function App() {
 
   return (
     <MotionConfig reducedMotion="user">
-      <div className="min-h-screen bg-[var(--color-bg)] text-[var(--color-ink)] flex flex-col">
       {authClient && (
         <NeonSessionBridge client={authClient} onUserChange={setAuthUser} />
       )}
 
-      {/* Clean Sticky Suite Header (Progresiones · Círculo · Escalas + Tools & Optional Google Auth) */}
-      <header className="sticky top-0 z-30 border-b border-[var(--color-border)] bg-[var(--color-bg)]/95 backdrop-blur-md">
-        <div className="mx-auto max-w-[1160px] h-14 sm:h-16 px-3 sm:px-8 flex items-center justify-between gap-2 sm:gap-4">
-          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
-            <AcordifyLogo size={24} />
-            <span className="text-[15px] sm:text-lg font-medium tracking-[-0.02em] text-[var(--color-ink)]">
-              Acordify
-            </span>
-            <span className="hidden sm:inline-flex rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-0.5 font-mono text-[10px] uppercase tracking-wider text-[var(--color-ink-muted)]">
-              Guitarra
-            </span>
-          </div>
-
-          {/* Desktop 3-View Suite Navigation */}
-          <nav
-            aria-label="Herramientas de estudio"
-            className="hidden md:inline-flex items-center rounded-full bg-[var(--color-surface-subtle)] p-1"
-          >
-            {SUITE_TABS.map((tab) => {
-              const active = activeSection === tab.id;
-              return (
+      {surface === 'landing' ? (
+        <LandingPage
+          onEnterStudio={handleEnterStudio}
+          onOpenAuth={() => setAuthModalOpen(true)}
+          authUser={authUser}
+          isAuthConfigured={isNeonAuthConfigured}
+          onPreviewChord={(symbol) => void player.previewChord(symbol)}
+          onPluckNote={(noteName) => void player.previewNote(noteName)}
+        />
+      ) : (
+        <div className="min-h-screen bg-[var(--color-bg)] text-[var(--color-ink)] flex flex-col">
+          {/* Clean Sticky Suite Header (Progresiones · Círculo · Escalas + Tools & Optional Google Auth) */}
+          <header className="sticky top-0 z-30 border-b border-[var(--color-border)] bg-[var(--color-bg)]/95 backdrop-blur-md">
+            <div className="mx-auto max-w-[1160px] h-14 sm:h-16 px-3 sm:px-8 flex items-center justify-between gap-2 sm:gap-4">
+              <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
                 <button
-                  key={tab.id}
                   type="button"
-                  onClick={() => handleNavigateSection(tab.id)}
-                  className={`relative px-3.5 py-1.5 rounded-full text-xs font-medium inline-flex items-center gap-1.5 transition-colors cursor-pointer ${
-                    active
-                      ? 'text-white'
-                      : 'text-[var(--color-ink-secondary)] hover:text-[var(--color-ink)]'
-                  }`}
+                  onClick={handleGoToLanding}
+                  title="Volver a la portada de Acordify"
+                  className="flex items-center gap-1.5 sm:gap-2 cursor-pointer hover:opacity-80 transition-opacity"
                 >
-                  {active && (
-                    <motion.span
-                      layoutId="suite-nav-pill"
-                      transition={{ type: 'spring', stiffness: 460, damping: 34 }}
-                      className="absolute inset-0 rounded-full bg-[var(--color-ink)]"
-                      aria-hidden="true"
-                    />
-                  )}
-                  <span className="relative z-10 inline-flex items-center gap-1.5">
-                    {tab.id === 'progressions' ? (
-                      <Music2 className="w-3.5 h-3.5" />
-                    ) : tab.id === 'circle' ? (
-                      <Compass className="w-3.5 h-3.5" />
-                    ) : (
-                      <Layers className="w-3.5 h-3.5" />
-                    )}
-                    <span>{tab.label}</span>
+                  <AcordifyLogo size={24} />
+                  <span className="text-[15px] sm:text-lg font-medium tracking-[-0.02em] text-[var(--color-ink)]">
+                    Acordify
                   </span>
                 </button>
-              );
-            })}
-          </nav>
+                <span className="hidden sm:inline-flex rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-0.5 font-mono text-[10px] uppercase tracking-wider text-[var(--color-ink-muted)]">
+                  Guitarra
+                </span>
+              </div>
 
-          {/* Right Actions: Afinador · Libreta · Optional Google Auth */}
-          <div className="flex items-center gap-1 sm:gap-2 shrink-0">
-            <button
-              type="button"
-              onClick={handleOpenTuner}
-              className="btn-secondary bg-[var(--color-surface)] px-2 sm:px-3.5 py-1 sm:py-1.5 text-[11px] sm:text-xs whitespace-nowrap"
-            >
-              <SlidersHorizontal className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
-              <span>Afinador</span>
-            </button>
+              {/* Desktop 3-View Suite Navigation */}
+              <nav
+                aria-label="Herramientas de estudio"
+                className="hidden md:inline-flex items-center rounded-full bg-[var(--color-surface-subtle)] p-1"
+              >
+                {SUITE_TABS.map((tab) => {
+                  const active = activeSection === tab.id;
+                  return (
+                    <button
+                      key={tab.id}
+                      type="button"
+                      onClick={() => handleNavigateSection(tab.id)}
+                      className={`relative px-3.5 py-1.5 rounded-full text-xs font-medium inline-flex items-center gap-1.5 transition-colors cursor-pointer ${
+                        active
+                          ? 'text-white'
+                          : 'text-[var(--color-ink-secondary)] hover:text-[var(--color-ink)]'
+                      }`}
+                    >
+                      {active && (
+                        <motion.span
+                          layoutId="suite-nav-pill"
+                          transition={{ type: 'spring', stiffness: 460, damping: 34 }}
+                          className="absolute inset-0 rounded-full bg-[var(--color-ink)]"
+                          aria-hidden="true"
+                        />
+                      )}
+                      <span className="relative z-10 inline-flex items-center gap-1.5">
+                        {tab.id === 'progressions' ? (
+                          <Music2 className="w-3.5 h-3.5" />
+                        ) : tab.id === 'circle' ? (
+                          <Compass className="w-3.5 h-3.5" />
+                        ) : (
+                          <Layers className="w-3.5 h-3.5" />
+                        )}
+                        <span>{tab.label}</span>
+                      </span>
+                    </button>
+                  );
+                })}
+              </nav>
 
-            <button
-              type="button"
-              onClick={() => setSavedOpen(true)}
-              className="btn-secondary overflow-visible shrink-0 bg-[var(--color-surface)] gap-1.5 px-2.5 sm:px-3.5 py-1 sm:py-1.5 text-[11px] sm:text-xs whitespace-nowrap"
-            >
-              <BookMarked className="w-3 h-3 sm:w-3.5 sm:h-3.5 shrink-0" />
-              <span>Libreta</span>
-              <span className="min-w-[20px] text-center rounded-full bg-[var(--color-surface-subtle)] px-1.5 py-0.5 font-mono text-[10px] sm:text-[11px] text-[var(--color-ink)] num-tabular leading-none">
-                {savedItems.length}
-              </span>
-            </button>
+              {/* Right Actions: Afinador · Libreta · Optional Google Auth */}
+              <div className="flex items-center gap-1 sm:gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={handleOpenTuner}
+                  className="btn-secondary bg-[var(--color-surface)] px-2 sm:px-3.5 py-1 sm:py-1.5 text-[11px] sm:text-xs whitespace-nowrap"
+                >
+                  <SlidersHorizontal className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
+                  <span>Afinador</span>
+                </button>
 
-            {isNeonAuthConfigured && (
-              authUser ? (
                 <button
                   type="button"
                   onClick={() => setSavedOpen(true)}
-                  title={`Conectado como ${authUser.name || authUser.email}`}
-                  className="btn-secondary bg-[var(--color-surface)] px-2 sm:px-3 py-1 sm:py-1.5 text-[11px] sm:text-xs whitespace-nowrap"
+                  className="btn-secondary overflow-visible shrink-0 bg-[var(--color-surface)] gap-1.5 px-2.5 sm:px-3.5 py-1 sm:py-1.5 text-[11px] sm:text-xs whitespace-nowrap"
                 >
-                  <span className="h-2 w-2 rounded-full bg-[var(--color-ok)] shrink-0" />
-                  <span className="max-w-[54px] sm:max-w-[68px] truncate">
-                    {(authUser.name || authUser.email).split(/[@\s]/)[0]}
+                  <BookMarked className="w-3 h-3 sm:w-3.5 sm:h-3.5 shrink-0" />
+                  <span>Libreta</span>
+                  <span className="min-w-[20px] text-center rounded-full bg-[var(--color-surface-subtle)] px-1.5 py-0.5 font-mono text-[10px] sm:text-[11px] text-[var(--color-ink)] num-tabular leading-none">
+                    {savedItems.length}
                   </span>
                 </button>
+
+                {isNeonAuthConfigured && (
+                  authUser ? (
+                    <button
+                      type="button"
+                      onClick={() => setSavedOpen(true)}
+                      title={`Conectado como ${authUser.name || authUser.email}`}
+                      className="btn-secondary bg-[var(--color-surface)] px-2 sm:px-3 py-1 sm:py-1.5 text-[11px] sm:text-xs whitespace-nowrap"
+                    >
+                      <span className="h-2 w-2 rounded-full bg-[var(--color-ok)] shrink-0" />
+                      <span className="max-w-[54px] sm:max-w-[68px] truncate">
+                        {(authUser.name || authUser.email).split(/[@\s]/)[0]}
+                      </span>
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setAuthModalOpen(true)}
+                      className="btn-secondary bg-[var(--color-surface)] px-2 sm:px-3 py-1 sm:py-1.5 text-[11px] sm:text-xs whitespace-nowrap"
+                    >
+                      <User className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
+                      <span>Entrar</span>
+                    </button>
+                  )
+                )}
+              </div>
+            </div>
+
+            {/* Mobile 3-View Navigation Row */}
+            <nav
+              aria-label="Navegación móvil de herramientas"
+              className="md:hidden border-t border-[var(--color-border)] bg-[var(--color-surface)]/90 px-3 py-1.5"
+            >
+              <div className="grid grid-cols-3 gap-1 rounded-full bg-[var(--color-surface-subtle)] p-0.5">
+                {SUITE_TABS.map((tab) => {
+                  const active = activeSection === tab.id;
+                  return (
+                    <button
+                      key={`mob-${tab.id}`}
+                      type="button"
+                      onClick={() => handleNavigateSection(tab.id)}
+                      className={`relative py-1.5 rounded-full text-xs font-medium transition-colors cursor-pointer ${
+                        active
+                          ? 'bg-[var(--color-ink)] text-white'
+                          : 'text-[var(--color-ink-secondary)] hover:text-[var(--color-ink)]'
+                      }`}
+                    >
+                      {tab.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </nav>
+          </header>
+
+          {/* Main Generous-Breathing Suite Flow */}
+          <main className="mx-auto w-full max-w-[1160px] flex-1 px-4 sm:px-8 py-7 sm:py-11">
+            <AnimatePresence mode="wait">
+              {activeSection === 'progressions' ? (
+                <motion.div
+                  key="view-progressions"
+                  initial={{ opacity: 0, y: 4 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, transition: { duration: 0.08 } }}
+                  transition={{ duration: 0.13, ease: [0.22, 1, 0.36, 1] }}
+                  className="space-y-8"
+                >
+                  <KeyMoodPicker
+                    progression={progression}
+                    guitarTone={guitarTone}
+                    strumPattern={strumPattern}
+                    onSelectMode={handleSelectMode}
+                    onSelectKey={handleSelectKey}
+                    onSelectMood={handleSelectMood}
+                    onNextVariant={handleNextVariant}
+                    onChangeGuitarTone={setGuitarTone}
+                    onChangeStrumPattern={setStrumPattern}
+                  />
+
+                  <TransportBar
+                    isPlaying={player.isPlaying}
+                    bpm={bpm}
+                    activeBeat={player.activeBeat}
+                    countInBeat={player.countInBeat}
+                    metronomeEnabled={metronomeEnabled}
+                    countInEnabled={countInEnabled}
+                    defaultSaveName={defaultSaveName}
+                    onTogglePlay={() => void player.toggle()}
+                    onChangeBpm={setBpm}
+                    onToggleMetronome={() => setMetronomeEnabled((v) => !v)}
+                    onToggleCountIn={() => setCountInEnabled((v) => !v)}
+                    onShare={() => void handleShare()}
+                    onSave={(name) => void handleSave(name)}
+                  />
+
+                  <ProgressionStrip
+                    progression={progression}
+                    activeChordIndex={player.activeChordIndex}
+                    activeBeat={player.activeBeat}
+                    editingSlotIndex={editingSlotIndex}
+                    onToggleEditSlot={handleToggleEditSlot}
+                    onReplaceChord={handleReplaceChord}
+                    onPreviewChord={(symbol) => void player.previewChord(symbol)}
+                    onPluckNote={(noteName) => void player.previewNote(noteName)}
+                  />
+
+                  <AiInspirationPanel
+                    chords={chordSymbols}
+                    degrees={progression.degrees}
+                    keyRoot={progression.keyRoot}
+                    mode={progression.mode}
+                    mood={progression.mood}
+                    bpm={bpm}
+                    strumPattern={strumPattern}
+                  />
+                </motion.div>
+              ) : activeSection === 'circle' ? (
+                <motion.div
+                  key="view-circle"
+                  initial={{ opacity: 0, y: 4 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, transition: { duration: 0.08 } }}
+                  transition={{ duration: 0.13, ease: [0.22, 1, 0.36, 1] }}
+                >
+                  <CircleOfFifthsView
+                    activeKeyRoot={progression.keyRoot}
+                    activeMode={progression.mode}
+                    onPreviewChord={(symbol) => void player.previewChord(symbol)}
+                    onPluckNote={(noteName) => void player.previewNote(noteName)}
+                    onComposeInKey={handleComposeFromTool}
+                  />
+                </motion.div>
               ) : (
-                <button
-                  type="button"
-                  onClick={() => setAuthModalOpen(true)}
-                  className="btn-secondary bg-[var(--color-surface)] px-2 sm:px-3 py-1 sm:py-1.5 text-[11px] sm:text-xs whitespace-nowrap"
+                <motion.div
+                  key="view-scales"
+                  initial={{ opacity: 0, y: 4 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, transition: { duration: 0.08 } }}
+                  transition={{ duration: 0.13, ease: [0.22, 1, 0.36, 1] }}
                 >
-                  <User className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
-                  <span>Entrar</span>
-                </button>
-              )
-            )}
-          </div>
+                  <ScalePracticeView
+                    initialRoot={progression.keyRoot}
+                    initialMode={progression.mode}
+                    onPluckNote={(scientificNote) => void player.previewNote(scientificNote)}
+                    onPreviewChord={(symbol) => void player.previewChord(symbol)}
+                    onPracticeProgression={handleComposeFromTool}
+                  />
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </main>
+
+          <footer className="border-t border-[var(--color-border)] py-5 px-4 sm:px-8 text-center text-xs text-[var(--color-ink-muted)]">
+            Acordify · Guitarra: progresiones, círculo de quintas, escalas y afinador directo en tu navegador.
+          </footer>
+
+          <TunerPanel
+            isOpen={tunerOpen}
+            onClose={() => setTunerOpen(false)}
+            guitarTone={guitarTone}
+          />
+          <SavedProgressionsDrawer
+            isOpen={savedOpen}
+            items={savedItems}
+            defaultSaveName={defaultSaveName}
+            storageMode={isCloudMode ? 'cloud' : 'local'}
+            isAuthConfigured={isNeonAuthConfigured}
+            authUser={authUser}
+            onOpenAuth={() => setAuthModalOpen(true)}
+            onSignOut={() => void handleSignOut()}
+            onQuickSave={(name) => void handleSave(name)}
+            onClose={() => setSavedOpen(false)}
+            onLoad={handleLoadSaved}
+            onDelete={(id) => void handleDeleteSaved(id)}
+          />
         </div>
+      )}
 
-        {/* Mobile 3-View Navigation Row */}
-        <nav
-          aria-label="Navegación móvil de herramientas"
-          className="md:hidden border-t border-[var(--color-border)] bg-[var(--color-surface)]/90 px-3 py-1.5"
-        >
-          <div className="grid grid-cols-3 gap-1 rounded-full bg-[var(--color-surface-subtle)] p-0.5">
-            {SUITE_TABS.map((tab) => {
-              const active = activeSection === tab.id;
-              return (
-                <button
-                  key={`mob-${tab.id}`}
-                  type="button"
-                  onClick={() => handleNavigateSection(tab.id)}
-                  className={`relative py-1.5 rounded-full text-xs font-medium transition-colors cursor-pointer ${
-                    active
-                      ? 'bg-[var(--color-ink)] text-white'
-                      : 'text-[var(--color-ink-secondary)] hover:text-[var(--color-ink)]'
-                  }`}
-                >
-                  {tab.label}
-                </button>
-              );
-            })}
-          </div>
-        </nav>
-      </header>
-
-      {/* Main Generous-Breathing Suite Flow */}
-      <main className="mx-auto w-full max-w-[1160px] flex-1 px-4 sm:px-8 py-7 sm:py-11">
-        <AnimatePresence mode="wait">
-          {activeSection === 'progressions' ? (
-            <motion.div
-              key="view-progressions"
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -6 }}
-              transition={{ duration: 0.16 }}
-              className="space-y-8"
-            >
-              <KeyMoodPicker
-                progression={progression}
-                guitarTone={guitarTone}
-                strumPattern={strumPattern}
-                onSelectMode={handleSelectMode}
-                onSelectKey={handleSelectKey}
-                onSelectMood={handleSelectMood}
-                onNextVariant={handleNextVariant}
-                onChangeGuitarTone={setGuitarTone}
-                onChangeStrumPattern={setStrumPattern}
-              />
-
-              <TransportBar
-                isPlaying={player.isPlaying}
-                bpm={bpm}
-                activeBeat={player.activeBeat}
-                countInBeat={player.countInBeat}
-                metronomeEnabled={metronomeEnabled}
-                countInEnabled={countInEnabled}
-                defaultSaveName={defaultSaveName}
-                onTogglePlay={() => void player.toggle()}
-                onChangeBpm={setBpm}
-                onToggleMetronome={() => setMetronomeEnabled((v) => !v)}
-                onToggleCountIn={() => setCountInEnabled((v) => !v)}
-                onShare={() => void handleShare()}
-                onSave={(name) => void handleSave(name)}
-              />
-
-              <ProgressionStrip
-                progression={progression}
-                activeChordIndex={player.activeChordIndex}
-                activeBeat={player.activeBeat}
-                editingSlotIndex={editingSlotIndex}
-                onToggleEditSlot={handleToggleEditSlot}
-                onReplaceChord={handleReplaceChord}
-                onPreviewChord={(symbol) => void player.previewChord(symbol)}
-                onPluckNote={(noteName) => void player.previewNote(noteName)}
-              />
-
-              <AiInspirationPanel
-                chords={chordSymbols}
-                degrees={progression.degrees}
-                keyRoot={progression.keyRoot}
-                mode={progression.mode}
-                mood={progression.mood}
-                bpm={bpm}
-                strumPattern={strumPattern}
-              />
-            </motion.div>
-          ) : activeSection === 'circle' ? (
-            <motion.div
-              key="view-circle"
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -6 }}
-              transition={{ duration: 0.16 }}
-            >
-              <CircleOfFifthsView
-                activeKeyRoot={progression.keyRoot}
-                activeMode={progression.mode}
-                onPreviewChord={(symbol) => void player.previewChord(symbol)}
-                onPluckNote={(noteName) => void player.previewNote(noteName)}
-                onComposeInKey={handleComposeFromTool}
-              />
-            </motion.div>
-          ) : (
-            <motion.div
-              key="view-scales"
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -6 }}
-              transition={{ duration: 0.16 }}
-            >
-              <ScalePracticeView
-                initialRoot={progression.keyRoot}
-                initialMode={progression.mode}
-                onPluckNote={(scientificNote) => void player.previewNote(scientificNote)}
-                onPreviewChord={(symbol) => void player.previewChord(symbol)}
-                onPracticeProgression={handleComposeFromTool}
-              />
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </main>
-
-      <footer className="border-t border-[var(--color-border)] py-5 px-4 sm:px-8 text-center text-xs text-[var(--color-ink-muted)]">
-        Acordify · Guitarra: progresiones, círculo de quintas, escalas y afinador directo en tu navegador.
-      </footer>
-
-      <TunerPanel
-        isOpen={tunerOpen}
-        onClose={() => setTunerOpen(false)}
-        guitarTone={guitarTone}
-      />
-      <SavedProgressionsDrawer
-        isOpen={savedOpen}
-        items={savedItems}
-        defaultSaveName={defaultSaveName}
-        storageMode={isCloudMode ? 'cloud' : 'local'}
-        isAuthConfigured={isNeonAuthConfigured}
-        authUser={authUser}
-        onOpenAuth={() => setAuthModalOpen(true)}
-        onSignOut={() => void handleSignOut()}
-        onQuickSave={(name) => void handleSave(name)}
-        onClose={() => setSavedOpen(false)}
-        onLoad={handleLoadSaved}
-        onDelete={(id) => void handleDeleteSaved(id)}
-      />
       <AuthModal
         isOpen={authModalOpen}
         onClose={() => setAuthModalOpen(false)}
         onAuthSuccess={() => toast.addToast('success', 'Sesión iniciada')}
+        onPluckNote={(noteName) => void player.previewNote(noteName)}
       />
       <ToastContainer toasts={toast.toasts} onDismiss={toast.removeToast} />
-      </div>
     </MotionConfig>
   );
 }

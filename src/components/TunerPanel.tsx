@@ -558,7 +558,7 @@ export const TunerPanel: React.FC<TunerPanelProps> = ({
     lockedString ?? (hasLiveReading ? reading.targetString : activeStrings[0]);
 
   const statusText = !isListening
-    ? 'En espera — activa el micrófono o escucha una cuerda de referencia'
+    ? 'En espera · Sin señal — activa el micrófono para medir o escucha una cuerda'
     : !reading
       ? 'Escuchando… toca una cuerda limpia y déjala sonar'
       : isInTune
@@ -1028,7 +1028,9 @@ export const TunerPanel: React.FC<TunerPanelProps> = ({
                   >
                     {hasLiveReading
                       ? `${reading.cents > 0 ? '+' : ''}${reading.cents} ct`
-                      : '— ct'}
+                      : isListening
+                        ? '— ct'
+                        : 'Sin señal'}
                   </span>
                   <div
                     className="flex items-end gap-0.5 h-3.5"

@@ -157,12 +157,12 @@
   .studio-slider::-webkit-slider-thumb {
     -webkit-appearance: none;
     appearance: none;
-    width: 16px;
-    height: 16px;
+    width: 20px;
+    height: 20px;
     border-radius: var(--radius-pill);
     background: var(--color-ink);
     border: 2px solid var(--color-surface);
-    box-shadow: 0 1px 3px rgba(17, 17, 17, 0.28);
+    box-shadow: 0 1px 4px rgba(17, 17, 17, 0.3);
     transition: transform 140ms ease;
   }
 
@@ -171,12 +171,12 @@
   }
 
   .studio-slider::-moz-range-thumb {
-    width: 16px;
-    height: 16px;
+    width: 20px;
+    height: 20px;
     border-radius: var(--radius-pill);
     background: var(--color-ink);
     border: 2px solid var(--color-surface);
-    box-shadow: 0 1px 3px rgba(17, 17, 17, 0.28);
+    box-shadow: 0 1px 4px rgba(17, 17, 17, 0.3);
     transition: transform 140ms ease;
   }
 
@@ -199,6 +199,10 @@
     transform-box: fill-box;
     transform-origin: center;
   }
+
+  .landing-marquee-track {
+    animation: landingMarquee 28s linear infinite;
+  }
 }
 
 @layer utilities {
@@ -218,8 +222,14 @@
   100% { transform: translateX(0); }
 }
 
+@keyframes landingMarquee {
+  0%   { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .string-pluck-active {
+  .string-pluck-active,
+  .landing-marquee-track {
     animation: none !important;
   }
 }

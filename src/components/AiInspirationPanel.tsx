@@ -80,6 +80,9 @@ export const AiInspirationPanel: React.FC<AiInspirationPanelProps> = ({
     }
   };
 
+  const isLocalFallbackResult = result?.source === 'fallback';
+  const effectiveAiReady = aiConfigured && !isLocalFallbackResult;
+
   return (
     <section aria-label="Letra y rasgueo" className="surface-card p-5 sm:p-6 space-y-4">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-[var(--color-border)]">
@@ -89,15 +92,21 @@ export const AiInspirationPanel: React.FC<AiInspirationPanelProps> = ({
           </div>
           <div>
             <p className="font-mono text-xs uppercase tracking-[0.14em] text-[var(--color-ink-muted)]">
-              {aiConfigured ? 'Extra opcional · IA conectada' : 'Práctica local · Sin IA conectada'}
+              {!aiConfigured
+                ? 'Práctica local · Sin IA conectada'
+                : isLocalFallbackResult
+                  ? 'Práctica local · IA ocupada ahora'
+                  : 'Extra opcional · IA conectada'}
             </p>
             <h2 className="text-2xl font-medium text-[var(--color-ink)] mt-0.5">
-              {aiConfigured ? 'Letra y rasgueo' : 'Sugerencia de rasgueo'}
+              {effectiveAiReady ? 'Letra y rasgueo' : 'Sugerencia de rasgueo'}
             </h2>
             <p className="text-sm text-[var(--color-ink-secondary)] mt-1">
-              {aiConfigured
-                ? 'Te sugiero una letra corta para esta vuelta, con tus acordes.'
-                : 'Sugerencia local de rasgueo para esta vuelta. Agrega GEMINI_API_KEY en Vercel para activar versos con IA.'}
+              {!aiConfigured
+                ? 'Sugerencia local de rasgueo para esta vuelta. Agrega GEMINI_API_KEY en Vercel para activar versos con IA.'
+                : isLocalFallbackResult
+                  ? 'Gemini no respondió en este intento; aquí tienes un patrón local para tus acordes y puedes reintentar cuando quieras.'
+                  : 'Te sugiero una letra corta para esta vuelta, con tus acordes.'}
             </p>
           </div>
         </div>
@@ -114,9 +123,11 @@ export const AiInspirationPanel: React.FC<AiInspirationPanelProps> = ({
               ? aiConfigured
                 ? 'Escribiendo idea...'
                 : 'Generando tip...'
-              : aiConfigured
-                ? 'Sugerir verso y tip'
-                : 'Sugerir tip de rasgueo'}
+              : !aiConfigured
+                ? 'Sugerir tip de rasgueo'
+                : isLocalFallbackResult
+                  ? 'Reintentar verso con IA'
+                  : 'Sugerir verso y tip'}
           </span>
         </button>
       </div>

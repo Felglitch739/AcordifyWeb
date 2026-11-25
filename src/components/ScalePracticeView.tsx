@@ -128,6 +128,8 @@ export const ScalePracticeView: React.FC<ScalePracticeViewProps> = ({
       window.clearInterval(timerRef.current);
       timerRef.current = null;
     }
+    stepCursorRef.current = 0;
+    setActiveStepIndex(0);
     setIsPlaying(false);
     setActiveNoteId(null);
   }, []);
@@ -273,12 +275,15 @@ export const ScalePracticeView: React.FC<ScalePracticeViewProps> = ({
       .filter((n) => n.fret <= 18 && !activeSet.has(`${n.stringNumber}-${n.fret}`));
   }, [showNextBoxConnection, nextBox, activeBox]);
 
-  const windowStart = Math.max(0, activeBox.startFret - (activeBox.startFret > 0 ? 1 : 0));
-  const rawEnd = Math.max(
-    activeBox.endFret + 1,
-    nextBoxDisplayNotes.length > 0 ? Math.max(...nextBoxDisplayNotes.map((n) => n.fret)) : 0,
-  );
-  const windowEnd = Math.max(windowStart + 4, rawEnd);
+  const windowStart = showNextBoxConnection
+    ? Math.max(0, activeBox.startFret - (activeBox.startFret > 0 ? 1 : 0))
+    : activeBox.startFret;
+  const windowEnd = showNextBoxConnection
+    ? Math.max(
+        activeBox.endFret + 1,
+        nextBoxDisplayNotes.length > 0 ? Math.max(...nextBoxDisplayNotes.map((n) => n.fret)) : 0,
+      )
+    : Math.max(activeBox.startFret + 3, activeBox.endFret);
   const fretCount = windowEnd - windowStart + 1;
 
   const FRET_COL_W = 54;
@@ -512,6 +517,7 @@ export const ScalePracticeView: React.FC<ScalePracticeViewProps> = ({
           </p>
           {activeStep && (
             <span className="font-mono text-xs text-[var(--color-ink-secondary)] whitespace-nowrap">
+              {!isPlaying && activeNoteId === null ? 'Listo para practicar · ' : ''}
               Paso {activeStep.order}/{activeBox.ascendingSteps.length} ·{' '}
               <strong className="text-[var(--color-ink)]">{activeStep.scientificNote}</strong> ·{' '}
               {activeStep.finger === 0 ? 'Al aire' : `Dedo ${activeStep.finger}`} · Grado{' '}
@@ -524,7 +530,8 @@ export const ScalePracticeView: React.FC<ScalePracticeViewProps> = ({
         <div className="w-full overflow-x-auto rounded-[12px] border border-[var(--color-border)] bg-[var(--color-surface-board)] py-3 px-2">
           <svg
             viewBox={`0 0 ${SVG_W} ${SVG_H}`}
-            className="mx-auto h-auto w-full max-w-[740px] select-none"
+            style={{ maxWidth: `${Math.min(720, Math.round(SVG_W * 1.45))}px` }}
+            className="mx-auto h-auto w-full select-none"
           >
             {/* Fretboard boundary lines */}
             {Array.from({ length: fretCount + 1 }, (_, i) => {
@@ -567,7 +574,7 @@ export const ScalePracticeView: React.FC<ScalePracticeViewProps> = ({
                     fill="#71717A"
                     className="font-mono text-[11px]"
                   >
-                    {fretNum === 0 ? 'Al aire' : `${fretNum}`}
+                    {fretNum === 0 ? 'Al aire' : `Tr. ${fretNum}`}
                   </text>
                 </g>
               );
@@ -723,6 +730,10 @@ export const ScalePracticeView: React.FC<ScalePracticeViewProps> = ({
                 <span>Nota azul (b5)</span>
               </span>
             )}
+            <span className="inline-flex items-center gap-1.5">
+              <span className="h-2.5 w-2.5 rounded-full bg-[#E4E4E7]" />
+              <span>Punto gris = guía de traste (3, 5, 7, 9, 12)</span>
+            </span>
           </div>
           <span>Pulsa cualquier punto para escucharlo</span>
         </div>
@@ -792,7 +803,7 @@ export const ScalePracticeView: React.FC<ScalePracticeViewProps> = ({
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            <div className="inline-flex items-center gap-1 rounded-full border border-[var(--color-border)] bg-[var(--color-surface-board)] px-2 py-1">
+            <div className="flex flex-wrap items-center gap-1.5 rounded-full border border-[var(--color-border)] bg-[var(--color-surface-board)] px-2.5 py-1">
               {[60, 80, 100, 120].map((presetBpm) => (
                 <button
                   key={presetBpm}
@@ -808,6 +819,7 @@ export const ScalePracticeView: React.FC<ScalePracticeViewProps> = ({
                 </button>
               ))}
               <input
+                id="scale-bpm-slider"
                 type="range"
                 min={45}
                 max={150}
@@ -815,11 +827,26 @@ export const ScalePracticeView: React.FC<ScalePracticeViewProps> = ({
                 value={bpm}
                 onChange={(e) => handleChangeBpm(Number(e.target.value))}
                 aria-label="Tempo de escala en BPM"
-                className="studio-slider w-16 ml-1"
+                className="studio-slider w-[220px] max-w-[54vw] ml-1"
               />
-              <span className="font-mono text-xs font-medium text-[var(--color-ink)] px-1.5 num-tabular">
-                {bpm} BPM
-              </span>
+              <div className="flex items-center gap-1 pl-1.5 border-l border-[var(--color-border)]">
+                <input
+                  id="scale-bpm-number-input"
+                  type="number"
+                  min={45}
+                  max={150}
+                  value={bpm}
+                  aria-label="Escribir BPM de escala"
+                  onChange={(e) => {
+                    const parsed = Number(e.target.value);
+                    if (Number.isFinite(parsed) && parsed > 0) {
+                      handleChangeBpm(parsed);
+                    }
+                  }}
+                  className="w-10 bg-transparent text-center font-mono text-xs font-medium text-[var(--color-ink)] num-tabular focus:outline-none"
+                />
+                <span className="font-mono text-[11px] text-[var(--color-ink-muted)]">BPM</span>
+              </div>
             </div>
 
             <div
