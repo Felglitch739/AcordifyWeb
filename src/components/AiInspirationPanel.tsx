@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { AnimatePresence, motion } from 'motion/react';
 import { Check, Copy, Feather, Sparkles } from 'lucide-react';
 import type { StrumPatternId } from '../audio';
 import { requestInspiration, type InspirationResponse } from '../lib/geminiClient';
@@ -110,49 +111,58 @@ export const AiInspirationPanel: React.FC<AiInspirationPanelProps> = ({
         />
       </div>
 
-      {result && (
-        <div className="rounded-[12px] border border-[var(--color-border)] bg-[var(--color-surface-board)] p-4 sm:p-5 space-y-3">
-          {result.notice && (
-            <p className="text-xs text-[var(--color-ink-muted)] border-b border-[var(--color-border)] pb-2.5">
-              {result.notice}
+      <AnimatePresence mode="wait">
+        {result && (
+          <motion.div
+            key={`${result.title}-${result.source}`}
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 4 }}
+            transition={{ duration: 0.18 }}
+            className="rounded-[12px] border border-[var(--color-border)] bg-[var(--color-surface-board)] p-4 sm:p-5 space-y-3"
+          >
+            {result.notice && (
+              <p className="text-xs text-[var(--color-ink-muted)] border-b border-[var(--color-border)] pb-2.5">
+                {result.notice}
+              </p>
+            )}
+
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h3 className="text-lg font-medium text-[var(--color-ink)]">
+                {result.title}
+              </h3>
+              <button
+                type="button"
+                onClick={() => void handleCopyLyrics()}
+                className="btn-secondary px-3 py-1 text-xs bg-[var(--color-surface)]"
+              >
+                {copied ? (
+                  <>
+                    <Check className="w-3.5 h-3.5 text-[var(--color-ok)]" />
+                    <span>Copiado</span>
+                  </>
+                ) : (
+                  <>
+                    <Copy className="w-3.5 h-3.5" />
+                    <span>Copiar</span>
+                  </>
+                )}
+              </button>
+            </div>
+
+            {result.lyrics && (
+              <pre className="whitespace-pre-wrap font-mono text-sm leading-relaxed text-[var(--color-ink)]">
+                {result.lyrics}
+              </pre>
+            )}
+
+            <p className="border-t border-[var(--color-border)] pt-3 text-sm text-[var(--color-ink-secondary)] leading-relaxed">
+              <span className="font-medium text-[var(--color-ink)]">Tip de rasgueo: </span>
+              {result.strumTip}
             </p>
-          )}
-
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <h3 className="text-lg font-medium text-[var(--color-ink)]">
-              {result.title}
-            </h3>
-            <button
-              type="button"
-              onClick={() => void handleCopyLyrics()}
-              className="btn-secondary px-3 py-1 text-xs bg-[var(--color-surface)]"
-            >
-              {copied ? (
-                <>
-                  <Check className="w-3.5 h-3.5 text-[var(--color-ok)]" />
-                  <span>Copiado</span>
-                </>
-              ) : (
-                <>
-                  <Copy className="w-3.5 h-3.5" />
-                  <span>Copiar</span>
-                </>
-              )}
-            </button>
-          </div>
-
-          {result.lyrics && (
-            <pre className="whitespace-pre-wrap font-mono text-sm leading-relaxed text-[var(--color-ink)]">
-              {result.lyrics}
-            </pre>
-          )}
-
-          <p className="border-t border-[var(--color-border)] pt-3 text-sm text-[var(--color-ink-secondary)] leading-relaxed">
-            <span className="font-medium text-[var(--color-ink)]">Tip de rasgueo: </span>
-            {result.strumTip}
-          </p>
-        </div>
-      )}
+          </motion.div>
+        )}
+      </AnimatePresence>
     </section>
   );
 };

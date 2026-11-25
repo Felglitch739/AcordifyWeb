@@ -33,6 +33,7 @@
     margin: 0;
     padding: 0;
     background-color: var(--color-bg);
+    background-image: radial-gradient(ellipse 90% 55% at 50% -10%, rgba(255, 255, 255, 0.92), transparent);
     color: var(--color-ink);
     font-family: var(--font-sans);
     font-size: 1rem;
@@ -91,6 +92,8 @@
     background-color: var(--color-surface);
     border: 1px solid var(--color-border);
     border-radius: var(--radius-card);
+    box-shadow: 0 1px 2px rgba(17, 17, 17, 0.04), 0 10px 26px -20px rgba(17, 17, 17, 0.14);
+    transition: border-color 150ms ease, box-shadow 200ms ease;
   }
 
   .btn-primary {
@@ -102,8 +105,12 @@
     background-color: var(--color-ink);
     color: var(--color-surface);
     font-weight: 500;
-    transition: opacity 150ms ease, background-color 150ms ease;
+    transition: opacity 150ms ease, background-color 150ms ease, transform 100ms ease;
     cursor: pointer;
+  }
+
+  .btn-primary:active:not(:disabled) {
+    transform: scale(0.985);
   }
 
   .btn-primary:hover:not(:disabled) {
@@ -125,8 +132,12 @@
     background-color: transparent;
     color: var(--color-ink);
     font-weight: 500;
-    transition: border-color 150ms ease, background-color 150ms ease;
+    transition: border-color 150ms ease, background-color 150ms ease, transform 100ms ease;
     cursor: pointer;
+  }
+
+  .btn-secondary:active:not(:disabled) {
+    transform: scale(0.985);
   }
 
   .btn-secondary:hover:not(:disabled) {

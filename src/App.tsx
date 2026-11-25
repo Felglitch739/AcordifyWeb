@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { MotionConfig } from 'motion/react';
 import { BookMarked, SlidersHorizontal } from 'lucide-react';
 import {
   useProgressionPlayer,
@@ -394,7 +395,8 @@ function App() {
   } · ${moodLabel}`;
 
   return (
-    <div className="min-h-screen bg-[var(--color-bg)] text-[var(--color-ink)] flex flex-col">
+    <MotionConfig reducedMotion="user">
+      <div className="min-h-screen bg-[var(--color-bg)] text-[var(--color-ink)] flex flex-col">
       {authClient && (
         <NeonSessionBridge client={authClient} onUserChange={setAuthUser} />
       )}
@@ -493,7 +495,7 @@ function App() {
       <TunerPanel
         isOpen={tunerOpen}
         onClose={() => setTunerOpen(false)}
-        onPlayReferenceNote={(noteName) => void player.previewNote(noteName)}
+        guitarTone={guitarTone}
       />
       <SavedProgressionsDrawer
         isOpen={savedOpen}
@@ -513,7 +515,8 @@ function App() {
         onAuthSuccess={() => toast.addToast('success', 'Sesión iniciada')}
       />
       <ToastContainer toasts={toast.toasts} onDismiss={toast.removeToast} />
-    </div>
+      </div>
+    </MotionConfig>
   );
 }
 

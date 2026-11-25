@@ -1,4 +1,5 @@
 import React from 'react';
+import { motion } from 'motion/react';
 import { RefreshCw } from 'lucide-react';
 import { STRUM_PATTERN_OPTIONS, type GuitarTone, type StrumPatternId } from '../audio';
 import {
@@ -90,13 +91,21 @@ export const KeyMoodPicker: React.FC<KeyMoodPickerProps> = ({
                   key={m}
                   type="button"
                   onClick={() => onSelectMode(m)}
-                  className={`px-4 py-1.5 rounded-full text-xs font-medium transition-colors duration-150 cursor-pointer ${
+                  className={`relative px-4 py-1.5 rounded-full text-xs font-medium transition-colors duration-150 cursor-pointer ${
                     active
-                      ? 'bg-[var(--color-ink)] text-white'
+                      ? 'text-white'
                       : 'text-[var(--color-ink-secondary)] hover:text-[var(--color-ink)]'
                   }`}
                 >
-                  {m === 'major' ? 'Mayor' : 'Menor'}
+                  {active && (
+                    <motion.span
+                      layoutId="picker-mode-pill"
+                      transition={{ type: 'spring', stiffness: 460, damping: 34 }}
+                      className="absolute inset-0 rounded-full bg-[var(--color-ink)]"
+                      aria-hidden="true"
+                    />
+                  )}
+                  <span className="relative z-10">{m === 'major' ? 'Mayor' : 'Menor'}</span>
                 </button>
               );
             })}
@@ -110,17 +119,25 @@ export const KeyMoodPicker: React.FC<KeyMoodPickerProps> = ({
                   key={`${progression.mode}-${option.root}`}
                   type="button"
                   onClick={() => onSelectKey(option.root)}
-                  className={`rounded-xl border py-1.5 px-1 flex flex-col items-center justify-center transition-colors duration-150 cursor-pointer ${
+                  className={`relative overflow-hidden rounded-xl border py-1.5 px-1 flex flex-col items-center justify-center transition-colors duration-150 cursor-pointer ${
                     isSelected
-                      ? 'border-[var(--color-ink)] bg-[var(--color-ink)] text-white'
+                      ? 'border-[var(--color-ink)] text-white'
                       : 'border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-ink)] hover:border-[var(--color-ink-muted)]'
                   }`}
                 >
-                  <span className="font-mono text-xs sm:text-sm font-medium leading-tight">
+                  {isSelected && (
+                    <motion.span
+                      layoutId="picker-key-pill"
+                      transition={{ type: 'spring', stiffness: 460, damping: 34 }}
+                      className="absolute inset-0 rounded-[11px] bg-[var(--color-ink)]"
+                      aria-hidden="true"
+                    />
+                  )}
+                  <span className="relative z-10 font-mono text-xs sm:text-sm font-medium leading-tight">
                     {option.root}
                   </span>
                   <span
-                    className={`text-[10px] leading-tight ${
+                    className={`relative z-10 text-[10px] leading-tight ${
                       isSelected ? 'text-white/75' : 'text-[var(--color-ink-muted)]'
                     }`}
                   >
@@ -144,13 +161,21 @@ export const KeyMoodPicker: React.FC<KeyMoodPickerProps> = ({
                   key={option.id}
                   type="button"
                   onClick={() => onSelectMood(option.id)}
-                  className={`rounded-full border px-3.5 py-1.5 text-xs font-medium transition-colors duration-150 cursor-pointer ${
+                  className={`relative overflow-hidden rounded-full border px-3.5 py-1.5 text-xs font-medium transition-colors duration-150 cursor-pointer ${
                     active
-                      ? 'border-[var(--color-ink)] bg-[var(--color-ink)] text-white'
+                      ? 'border-[var(--color-ink)] text-white'
                       : 'border-[var(--color-border)] bg-transparent text-[var(--color-ink-secondary)] hover:border-[var(--color-ink-muted)] hover:text-[var(--color-ink)]'
                   }`}
                 >
-                  {option.label}
+                  {active && (
+                    <motion.span
+                      layoutId="picker-mood-pill"
+                      transition={{ type: 'spring', stiffness: 460, damping: 34 }}
+                      className="absolute inset-0 rounded-full bg-[var(--color-ink)]"
+                      aria-hidden="true"
+                    />
+                  )}
+                  <span className="relative z-10">{option.label}</span>
                 </button>
               );
             })}
@@ -176,13 +201,21 @@ export const KeyMoodPicker: React.FC<KeyMoodPickerProps> = ({
                     key={item.id}
                     type="button"
                     onClick={() => onChangeGuitarTone(item.id)}
-                    className={`px-3 py-1 rounded-full text-xs font-medium transition-colors duration-150 cursor-pointer ${
+                    className={`relative px-3 py-1 rounded-full text-xs font-medium transition-colors duration-150 cursor-pointer ${
                       active
-                        ? 'bg-[var(--color-surface)] text-[var(--color-ink)] border border-[var(--color-border)]'
+                        ? 'text-[var(--color-ink)]'
                         : 'text-[var(--color-ink-secondary)] hover:text-[var(--color-ink)]'
                     }`}
                   >
-                    {item.label}
+                    {active && (
+                      <motion.span
+                        layoutId="picker-tone-pill"
+                        transition={{ type: 'spring', stiffness: 460, damping: 34 }}
+                        className="absolute inset-0 rounded-full bg-[var(--color-surface)] border border-[var(--color-border)] shadow-[0_1px_2px_rgba(17,17,17,0.06)]"
+                        aria-hidden="true"
+                      />
+                    )}
+                    <span className="relative z-10">{item.label}</span>
                   </button>
                 );
               })}
@@ -205,13 +238,21 @@ export const KeyMoodPicker: React.FC<KeyMoodPickerProps> = ({
                     type="button"
                     title={item.shortHint}
                     onClick={() => onChangeStrumPattern(item.id)}
-                    className={`px-3 py-1 rounded-full text-xs font-medium transition-colors duration-150 cursor-pointer ${
+                    className={`relative px-3 py-1 rounded-full text-xs font-medium transition-colors duration-150 cursor-pointer ${
                       active
-                        ? 'bg-[var(--color-surface)] text-[var(--color-ink)] border border-[var(--color-border)]'
+                        ? 'text-[var(--color-ink)]'
                         : 'text-[var(--color-ink-secondary)] hover:text-[var(--color-ink)]'
                     }`}
                   >
-                    {item.label}
+                    {active && (
+                      <motion.span
+                        layoutId="picker-strum-pill"
+                        transition={{ type: 'spring', stiffness: 460, damping: 34 }}
+                        className="absolute inset-0 rounded-full bg-[var(--color-surface)] border border-[var(--color-border)] shadow-[0_1px_2px_rgba(17,17,17,0.06)]"
+                        aria-hidden="true"
+                      />
+                    )}
+                    <span className="relative z-10">{item.label}</span>
                   </button>
                 );
               })}

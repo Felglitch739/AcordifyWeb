@@ -1,5 +1,6 @@
 export interface GuitarStringInfo {
   stringNumber: 1 | 2 | 3 | 4 | 5 | 6;
+  midi?: number;
   label: string;
   spanishName: string;
   noteName: string;
@@ -31,15 +32,16 @@ export interface TuningReading {
 }
 
 export const GUITAR_STRINGS: readonly GuitarStringInfo[] = [
-  { stringNumber: 6, label: 'E', spanishName: '6ª · Mi grave', noteName: 'E', octave: 2, frequency: 82.41 },
-  { stringNumber: 5, label: 'A', spanishName: '5ª · La', noteName: 'A', octave: 2, frequency: 110.0 },
-  { stringNumber: 4, label: 'D', spanishName: '4ª · Re', noteName: 'D', octave: 3, frequency: 146.83 },
-  { stringNumber: 3, label: 'G', spanishName: '3ª · Sol', noteName: 'G', octave: 3, frequency: 196.0 },
-  { stringNumber: 2, label: 'B', spanishName: '2ª · Si', noteName: 'B', octave: 3, frequency: 246.94 },
-  { stringNumber: 1, label: 'e', spanishName: '1ª · Mi aguda', noteName: 'E', octave: 4, frequency: 329.63 },
+  { stringNumber: 6, midi: 40, label: 'E', spanishName: '6ª · Mi grave', noteName: 'E', octave: 2, frequency: 82.41 },
+  { stringNumber: 5, midi: 45, label: 'A', spanishName: '5ª · La', noteName: 'A', octave: 2, frequency: 110.0 },
+  { stringNumber: 4, midi: 50, label: 'D', spanishName: '4ª · Re', noteName: 'D', octave: 3, frequency: 146.83 },
+  { stringNumber: 3, midi: 55, label: 'G', spanishName: '3ª · Sol', noteName: 'G', octave: 3, frequency: 196.0 },
+  { stringNumber: 2, midi: 59, label: 'B', spanishName: '2ª · Si', noteName: 'B', octave: 3, frequency: 246.94 },
+  { stringNumber: 1, midi: 64, label: 'e', spanishName: '1ª · Mi aguda', noteName: 'E', octave: 4, frequency: 329.63 },
 ] as const;
 
 const CHROMATIC_NOTES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'] as const;
+const CHROMATIC_NOTES_FLAT = ['C', 'Db', 'D', 'Eb', 'E', 'F', 'Gb', 'G', 'Ab', 'A', 'Bb', 'B'] as const;
 
 export function computeRms(buffer: Float32Array): number {
   if (buffer.length === 0) return 0;
@@ -60,7 +62,7 @@ export function detectPitchYin(
   sampleRate: number,
   options: YinOptions = {},
 ): PitchDetectionResult | null {
-  const minFreq = options.minFreq ?? 65;
+  const minFreq = options.minFreq ?? 48;
   const maxFreq = options.maxFreq ?? 1000;
   const threshold = options.threshold ?? 0.15;
   const minRms = options.minRms ?? 0.01;
@@ -140,19 +142,23 @@ export function detectPitchYin(
 export function frequencyToTuningReading(
   frequency: number,
   lockedString?: GuitarStringInfo | null,
+  candidateStrings: readonly GuitarStringInfo[] = GUITAR_STRINGS,
+  preferFlats = false,
 ): TuningReading {
   const midiFloat = 69 + 12 * Math.log2(frequency / 440);
   const nearestMidi = Math.round(midiFloat);
-  const detectedNote = CHROMATIC_NOTES[((nearestMidi % 12) + 12) % 12];
+  const notePool = preferFlats ? CHROMATIC_NOTES_FLAT : CHROMATIC_NOTES;
+  const detectedNote = notePool[((nearestMidi % 12) + 12) % 12];
   const detectedOctave = Math.floor(nearestMidi / 12) - 1;
 
+  const candidates = candidateStrings.length > 0 ? candidateStrings : GUITAR_STRINGS;
   let targetString: GuitarStringInfo;
   if (lockedString) {
     targetString = lockedString;
   } else {
-    targetString = GUITAR_STRINGS[0];
+    targetString = candidates[0];
     let bestAbsCents = Infinity;
-    for (const candidate of GUITAR_STRINGS) {
+    for (const candidate of candidates) {
       const absCents = Math.abs(1200 * Math.log2(frequency / candidate.frequency));
       if (absCents < bestAbsCents) {
         bestAbsCents = absCents;

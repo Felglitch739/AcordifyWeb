@@ -1,4 +1,5 @@
 import React, { useRef, useState } from 'react';
+import { AnimatePresence, motion } from 'motion/react';
 import {
   BookmarkPlus,
   Check,
@@ -81,13 +82,18 @@ export const TransportBar: React.FC<TransportBarProps> = ({
 
   return (
     <div className="sticky bottom-3 sm:bottom-4 z-30 w-full">
-      <div className="surface-card p-3.5 sm:p-4 shadow-[0_8px_24px_-12px_rgba(17,17,17,0.12)]">
+      <div className="surface-card bg-white/92 backdrop-blur-md p-3.5 sm:p-4 shadow-[0_12px_32px_-14px_rgba(17,17,17,0.16)]">
         {/* Inline Save Form cleanly inside bar */}
-        {isSavingInline && (
-          <form
-            onSubmit={handleConfirmSave}
-            className="mb-3 pb-3 border-b border-[var(--color-border)] flex flex-col sm:flex-row items-stretch sm:items-center gap-2"
-          >
+        <AnimatePresence initial={false}>
+          {isSavingInline && (
+            <motion.form
+              initial={{ opacity: 0, y: -6 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -6 }}
+              transition={{ duration: 0.16 }}
+              onSubmit={handleConfirmSave}
+              className="mb-3 pb-3 border-b border-[var(--color-border)] flex flex-col sm:flex-row items-stretch sm:items-center gap-2"
+            >
             <label
               htmlFor="save-prog-name"
               className="text-xs font-medium text-[var(--color-ink-secondary)] shrink-0"
@@ -117,8 +123,9 @@ export const TransportBar: React.FC<TransportBarProps> = ({
                 <span>Cancelar</span>
               </button>
             </div>
-          </form>
-        )}
+            </motion.form>
+          )}
+        </AnimatePresence>
 
         {/* Flex-wrap guarantees nothing ever overflows container width at 1920px or 390px */}
         <div className="flex flex-wrap items-center justify-between gap-2.5 sm:gap-3">
@@ -159,8 +166,11 @@ export const TransportBar: React.FC<TransportBarProps> = ({
                 [0, 1, 2, 3].map((beatIdx) => {
                   const isLit = isPlaying && activeBeat === beatIdx;
                   return (
-                    <span
+                    <motion.span
                       key={beatIdx}
+                      initial={false}
+                      animate={{ scale: isLit ? 1.25 : 1 }}
+                      transition={{ type: 'spring', stiffness: 450, damping: 24 }}
                       className="h-2 w-2 rounded-full transition-colors duration-150"
                       style={{
                         backgroundColor: isLit

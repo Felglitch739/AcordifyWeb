@@ -1,4 +1,5 @@
 import React, { useEffect } from 'react';
+import { AnimatePresence, motion } from 'motion/react';
 import { BookOpen, Cloud, LogOut, Play, Trash2, X } from 'lucide-react';
 import type { AuthUserSummary } from '../lib/neonAuth';
 import type { SavedProgression } from '../storage';
@@ -52,20 +53,30 @@ export const SavedProgressionsDrawer: React.FC<SavedProgressionsDrawerProps> = (
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isOpen, onClose]);
 
-  if (!isOpen) return null;
-
   return (
-    <div
-      onClick={onClose}
-      className="fixed inset-0 z-50 flex justify-end bg-[var(--color-backdrop)]"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="saved-drawer-title"
-    >
-      <div
-        onClick={(e) => e.stopPropagation()}
-        className="h-full w-full max-w-md border-l border-[var(--color-border)] bg-[var(--color-surface)] p-6 flex flex-col"
-      >
+    <AnimatePresence>
+      {isOpen && (
+        <motion.div
+          key="saved-drawer-backdrop"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.16 }}
+          onClick={onClose}
+          className="fixed inset-0 z-50 flex justify-end bg-[var(--color-backdrop)] backdrop-blur-[2px]"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="saved-drawer-title"
+        >
+          <motion.div
+            key="saved-drawer-panel"
+            initial={{ x: '100%' }}
+            animate={{ x: 0 }}
+            exit={{ x: '100%' }}
+            transition={{ type: 'spring', stiffness: 380, damping: 36 }}
+            onClick={(e) => e.stopPropagation()}
+            className="h-full w-full max-w-md border-l border-[var(--color-border)] bg-[var(--color-surface)] p-6 flex flex-col shadow-[0_24px_60px_-20px_rgba(17,17,17,0.3)]"
+          >
         <div className="flex items-start justify-between border-b border-[var(--color-border)] pb-4">
           <div>
             <p className="inline-flex items-center gap-1.5 font-mono text-xs uppercase tracking-[0.14em] text-[var(--color-ink-muted)]">
@@ -200,7 +211,9 @@ export const SavedProgressionsDrawer: React.FC<SavedProgressionsDrawerProps> = (
             )}
           </div>
         )}
-      </div>
-    </div>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
   );
 };

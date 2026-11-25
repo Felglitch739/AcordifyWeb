@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { AnimatePresence, motion } from 'motion/react';
 import { ArrowLeftRight, Play, Volume2, X } from 'lucide-react';
 import { getGuitarChord, type GuitarChordVoicing } from '../data/chords';
 import {
@@ -94,16 +95,25 @@ export const ProgressionStrip: React.FC<ProgressionStripProps> = ({
           const isEditing = editingSlotIndex === slot.slotIndex;
 
           return (
-            <article
+            <motion.article
               key={`slot-${slot.slotIndex}`}
-              className={`surface-card p-4 flex flex-col justify-between transition-colors duration-150 ${
+              initial={false}
+              animate={{ y: isActive ? -3 : 0 }}
+              transition={{ type: 'spring', stiffness: 380, damping: 30 }}
+              className={`surface-card relative overflow-hidden p-4 flex flex-col justify-between transition-colors duration-150 ${
                 isActive
-                  ? 'border-[var(--color-accent)] bg-[var(--color-surface)]'
+                  ? 'border-[var(--color-accent)] bg-[var(--color-surface)] shadow-[0_14px_30px_-16px_rgba(232,93,61,0.32)]'
                   : isEditing
-                    ? 'border-[var(--color-ink)]'
-                    : ''
+                    ? 'border-[var(--color-ink)] shadow-[0_12px_28px_-18px_rgba(17,17,17,0.18)]'
+                    : 'hover:border-[var(--color-ink-muted)] hover:shadow-[0_12px_28px_-18px_rgba(17,17,17,0.18)]'
               }`}
             >
+              {isActive && (
+                <span
+                  aria-hidden="true"
+                  className="pointer-events-none absolute inset-x-0 top-0 h-[2px] bg-[var(--color-accent)]"
+                />
+              )}
               <div>
                 {/* Top Metadata Strip (Monochrome hairline) */}
                 <div
@@ -222,14 +232,22 @@ export const ProgressionStrip: React.FC<ProgressionStripProps> = ({
                   )}
                 </button>
               </div>
-            </article>
+            </motion.article>
           );
         })}
       </div>
 
       {/* Inline Replacement Options Tray */}
-      {editingSlotIndex !== null && (
-        <div className="surface-card border-[var(--color-ink)] p-5 space-y-4">
+      <AnimatePresence initial={false}>
+        {editingSlotIndex !== null && (
+          <motion.div
+            key={`tray-${editingSlotIndex}`}
+            initial={{ opacity: 0, y: -6 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -4 }}
+            transition={{ duration: 0.16 }}
+            className="surface-card border-[var(--color-ink)] p-5 space-y-4"
+          >
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-[var(--color-border)]">
             <div>
               <p className="font-mono text-xs uppercase tracking-[0.14em] text-[var(--color-ink-muted)]">
@@ -302,8 +320,9 @@ export const ProgressionStrip: React.FC<ProgressionStripProps> = ({
               );
             })}
           </div>
-        </div>
-      )}
+          </motion.div>
+        )}
+      </AnimatePresence>
     </section>
   );
 };

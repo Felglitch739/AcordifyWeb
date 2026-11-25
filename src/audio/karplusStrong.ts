@@ -75,7 +75,7 @@ export function synthesizePluckedStringBuffer(
   velocity = 0.85,
 ): Float32Array {
   const safeRate = Math.max(8000, Math.floor(sampleRate));
-  const safeFreq = Math.max(55, Math.min(2400, frequency));
+  const safeFreq = Math.max(45, Math.min(2400, frequency));
   const safeDur = Math.max(0.15, Math.min(6, durationSec));
   const totalSamples = Math.max(1, Math.round(safeRate * safeDur));
   const output = new Float32Array(totalSamples);
