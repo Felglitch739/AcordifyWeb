@@ -30,3 +30,28 @@ export {
   generateProgression,
   getReplacementSuggestions,
 } from './progressions';
+
+export {
+  CIRCLE_POSITIONS,
+  compareCircleKeys,
+  getCirclePositionForKey,
+  getDiatonicTetrads,
+  getHarmonicNeighbors,
+  type CirclePosition,
+  type DiatonicTetrad,
+  type HarmonicNeighbors,
+  type KeyComparison,
+  type SharedChordLink,
+  type TransformedChordInfo,
+} from './circle';
+
+export {
+  PRACTICE_SCALES,
+  SCALE_ROOTS,
+  buildScaleBoxes,
+  getScaleCompatibleChords,
+  type PracticeScaleDefinition,
+  type PracticeScaleId,
+  type ScaleBox,
+  type ScaleBoxNote,
+} from './scales';

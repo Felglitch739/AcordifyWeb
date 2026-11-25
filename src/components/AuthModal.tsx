@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { AnimatePresence, motion } from 'motion/react';
 import { X } from 'lucide-react';
 import { authClient } from '../lib/neonAuth';
 
@@ -47,7 +48,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   }, [isOpen, onClose]);
 
   const client = authClient;
-  if (!isOpen || !client) return null;
+  if (!client) return null;
 
   const handleGoogleSignIn = async () => {
     setErrorMsg(null);
@@ -104,17 +105,29 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   };
 
   return (
-    <div
-      onClick={onClose}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--color-backdrop)] p-4"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="auth-modal-title"
-    >
-      <div
-        onClick={(e) => e.stopPropagation()}
-        className="surface-card w-full max-w-md p-6"
-      >
+    <AnimatePresence>
+      {isOpen && (
+        <motion.div
+          key="auth-backdrop"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.16 }}
+          onClick={onClose}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--color-backdrop)] p-4 backdrop-blur-[2px]"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="auth-modal-title"
+        >
+          <motion.div
+            key="auth-modal"
+            initial={{ opacity: 0, y: 10, scale: 0.985 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 8, scale: 0.985 }}
+            transition={{ type: 'spring', stiffness: 420, damping: 32 }}
+            onClick={(e) => e.stopPropagation()}
+            className="surface-card w-full max-w-md max-h-[92vh] overflow-y-auto p-6 shadow-[0_24px_60px_-20px_rgba(17,17,17,0.34)]"
+          >
         <div className="flex items-start justify-between gap-4 border-b border-[var(--color-border)] pb-4">
           <div>
             <p className="font-mono text-xs uppercase tracking-[0.14em] text-[var(--color-ink-muted)]">
@@ -282,7 +295,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 : 'Crear cuenta'}
           </button>
         </form>
-      </div>
-    </div>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
   );
 };

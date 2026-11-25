@@ -26,3 +26,5 @@ export { TiltCard3D } from './TiltCard3D';
 export { AuthModal } from './AuthModal';
 export { AiInspirationPanel } from './AiInspirationPanel';
 export { AcordifyLogo } from './AcordifyLogo';
+export { CircleOfFifthsView } from './CircleOfFifthsView';
+export { ScalePracticeView } from './ScalePracticeView';
