@@ -159,12 +159,120 @@ function extractGeminiJsonText(payload) {
   }
 }
 
+let cachedResolvedModel = null;
+
+/** @param {string} raw */
+function normalizeModelId(raw) {
+  return raw.trim().replace(/^models\//i, '');
+}
+
+export function _resetCachedModelForTests() {
+  cachedResolvedModel = null;
+}
+
+/**
+ * @param {string} apiKey
+ * @param {string} model
+ * @param {NonNullable<ReturnType<typeof normalizeInspirationInput>>} input
+ */
+async function callGeminiGenerateContent(apiKey, model, input) {
+  const isFlash25 = /^gemini-2\.5-flash/i.test(model);
+  const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(
+    model,
+  )}:generateContent`;
+
+  return fetch(endpoint, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-goog-api-key': apiKey,
+    },
+    body: JSON.stringify({
+      contents: [
+        {
+          role: 'user',
+          parts: [{ text: buildGeminiPrompt(input) }],
+        },
+      ],
+      generationConfig: {
+        responseMimeType: 'application/json',
+        responseSchema: {
+          type: 'OBJECT',
+          properties: {
+            title: { type: 'STRING' },
+            lyrics: { type: 'STRING' },
+            strumTip: { type: 'STRING' },
+          },
+          required: ['title', 'lyrics', 'strumTip'],
+        },
+        temperature: 0.75,
+        maxOutputTokens: 700,
+        ...(isFlash25 ? { thinkingConfig: { thinkingBudget: 0 } } : {}),
+      },
+    }),
+    signal: AbortSignal.timeout(9000),
+  });
+}
+
+/**
+ * @param {string} apiKey
+ * @param {string} failedModel
+ * @returns {Promise<string | null>}
+ */
+async function discoverFallbackGeminiModel(apiKey, failedModel) {
+  try {
+    const res = await fetch(
+      'https://generativelanguage.googleapis.com/v1beta/models?pageSize=100',
+      {
+        headers: { 'x-goog-api-key': apiKey },
+        signal: AbortSignal.timeout(4000),
+      },
+    );
+    if (!res.ok) return null;
+
+    const payload = await res.json();
+    const models = Array.isArray(payload?.models) ? payload.models : [];
+    const candidates = [];
+
+    for (const m of models) {
+      if (!m || typeof m !== 'object') continue;
+      if (
+        !Array.isArray(m.supportedGenerationMethods) ||
+        !m.supportedGenerationMethods.includes('generateContent')
+      ) {
+        continue;
+      }
+      if (typeof m.name !== 'string') continue;
+      const id = normalizeModelId(m.name);
+      if (!/^gemini-/i.test(id) || id === failedModel) continue;
+      if (/embedding|imagen|veo|tts|audio|robotics|computer-use|aqa|vision|thinking|learnlm/i.test(id)) {
+        continue;
+      }
+
+      const ver = id.match(/^gemini-(\d+)(?:\.(\d+))?/i);
+      const score =
+        (Number(ver?.[1] ?? 0) * 10 + Number(ver?.[2] ?? 0)) * 10 +
+        (id.includes('flash') ? 1000 : 0) +
+        (!id.includes('lite') ? 50 : 0) +
+        (!/preview|exp|-\d{2}-\d{2}|-\d{3}$/i.test(id) ? 100 : 0);
+
+      candidates.push({ id, score });
+    }
+
+    candidates.sort((a, b) => b.score - a.score);
+    return candidates[0]?.id ?? null;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * @returns {Promise<Response>}
  */
 export async function GET() {
   const aiConfigured = Boolean(process.env.GEMINI_API_KEY?.trim());
-  const model = process.env.GEMINI_MODEL?.trim() || 'gemini-2.5-flash';
+  const model =
+    cachedResolvedModel || normalizeModelId(process.env.GEMINI_MODEL || 'gemini-2.5-flash');
   return jsonResponse({ aiConfigured, model }, 200);
 }
 
@@ -194,44 +302,22 @@ export async function POST(request) {
     return jsonResponse(buildLocalStrumFallback(input, 'missing_key'), 200);
   }
 
-  const model = process.env.GEMINI_MODEL?.trim() || 'gemini-2.5-flash';
-  const isFlash25 = /^gemini-2\.5-flash/i.test(model);
-  const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(
-    model,
-  )}:generateContent`;
+  const envModel = process.env.GEMINI_MODEL?.trim();
+  const configuredModel = normalizeModelId(envModel || 'gemini-2.5-flash');
+  let activeModel = envModel ? configuredModel : cachedResolvedModel || configuredModel;
 
   try {
-    const geminiRes = await fetch(endpoint, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-goog-api-key': apiKey,
-      },
-      body: JSON.stringify({
-        contents: [
-          {
-            role: 'user',
-            parts: [{ text: buildGeminiPrompt(input) }],
-          },
-        ],
-        generationConfig: {
-          responseMimeType: 'application/json',
-          responseSchema: {
-            type: 'OBJECT',
-            properties: {
-              title: { type: 'STRING' },
-              lyrics: { type: 'STRING' },
-              strumTip: { type: 'STRING' },
-            },
-            required: ['title', 'lyrics', 'strumTip'],
-          },
-          temperature: 0.75,
-          maxOutputTokens: 700,
-          ...(isFlash25 ? { thinkingConfig: { thinkingBudget: 0 } } : {}),
-        },
-      }),
-      signal: AbortSignal.timeout(10000),
-    });
+    let geminiRes = await callGeminiGenerateContent(apiKey, activeModel, input);
+
+    if (geminiRes.status === 404) {
+      const discovered = await discoverFallbackGeminiModel(apiKey, activeModel);
+      if (!discovered) {
+        return jsonResponse(buildLocalStrumFallback(input, 'http_404_no_models'), 200);
+      }
+      activeModel = discovered;
+      cachedResolvedModel = discovered;
+      geminiRes = await callGeminiGenerateContent(apiKey, activeModel, input);
+    }
 
     if (!geminiRes.ok) {
       return jsonResponse(buildLocalStrumFallback(input, `http_${geminiRes.status}`), 200);
@@ -259,7 +345,7 @@ export async function POST(request) {
     return jsonResponse(
       {
         source: 'gemini',
-        model,
+        model: activeModel,
         title,
         lyrics,
         strumTip,

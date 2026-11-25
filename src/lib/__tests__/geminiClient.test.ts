@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { GET, POST } from '../../../api/inspiration.js';
+import { GET, POST, _resetCachedModelForTests } from '../../../api/inspiration.js';
 import { LOCAL_FALLBACK_NOTICE } from '../localStrumTip';
 import { fetchInspirationStatus, requestInspiration } from '../geminiClient';
 
@@ -8,6 +8,7 @@ const ORIGINAL_MODEL = process.env.GEMINI_MODEL;
 
 afterEach(() => {
   vi.restoreAllMocks();
+  _resetCachedModelForTests();
   if (ORIGINAL_KEY === undefined) {
     delete process.env.GEMINI_API_KEY;
   } else {
@@ -185,6 +186,75 @@ describe('Gemini proxy & client graceful fallback', () => {
     expect(data.source).toBe('gemini');
     expect(data.title).toBe('Cafetera tibia');
     expect(String(data.lyrics)).toContain('[C]Lluvia fina en el cristal\n[Am]suena el cuarto');
+  });
+
+  it('auto-discovers an active Flash model via ListModels when default model returns 404', async () => {
+    process.env.GEMINI_API_KEY = 'fake-test-gemini-key';
+    delete process.env.GEMINI_MODEL;
+
+    const fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(new Response('Not Found', { status: 404 }))
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            models: [
+              {
+                name: 'models/embedding-001',
+                supportedGenerationMethods: ['embedContent'],
+              },
+              {
+                name: 'models/gemini-2.0-flash-exp',
+                supportedGenerationMethods: ['generateContent'],
+              },
+              {
+                name: 'models/gemini-3.8-flash',
+                supportedGenerationMethods: ['generateContent'],
+              },
+            ],
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            candidates: [
+              {
+                content: {
+                  parts: [
+                    {
+                      text: JSON.stringify({
+                        title: 'Calle tranquila',
+                        lyrics: '[C]Tarde clara\n[Am]paso lento\n[F]brisa suave\n[G]cierra el viento',
+                        strumTip: 'Acentúa C y F en el primer pulso.',
+                      }),
+                    },
+                  ],
+                },
+              },
+            ],
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        ),
+      );
+
+    const req = new Request('http://localhost/api/inspiration', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(SAMPLE_PAYLOAD),
+    });
+
+    const res = await POST(req);
+    expect(res.status).toBe(200);
+    const data = (await res.json()) as Record<string, unknown>;
+
+    expect(fetchSpy).toHaveBeenCalledTimes(3);
+    expect(String(fetchSpy.mock.calls[1][0])).toContain('/v1beta/models?pageSize=100');
+    expect(String(fetchSpy.mock.calls[2][0])).toContain('gemini-3.8-flash:generateContent');
+    expect(data.source).toBe('gemini');
+    expect(data.model).toBe('gemini-3.8-flash');
+    expect(String(data.lyrics)).toContain('[C]');
   });
 
   it('requestInspiration client returns local fallback cleanly on network errors', async () => {
