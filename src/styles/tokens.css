@@ -5,21 +5,21 @@
 
 :root {
   /* Palette */
-  --color-bg: #F4F4F5;
-  --color-surface: #FFFFFF;
-  --color-surface-subtle: #ECECEF;
-  --color-surface-board: #FAFAFA;
-  --color-ink: #111111;
-  --color-ink-secondary: #52525B;
-  --color-ink-muted: #71717A;
-  --color-border: #E4E4E7;
-  --color-border-strong: #111111;
+  --color-bg: #F6F2EB;
+  --color-surface: #FFFCF7;
+  --color-surface-subtle: #EFE9DF;
+  --color-surface-board: #F6F1E9;
+  --color-ink: #211B17;
+  --color-ink-secondary: #594D42;
+  --color-ink-muted: #6C6055;
+  --color-border: #DED5C9;
+  --color-border-strong: #211B17;
 
   /* Single Semantic Active Accent */
-  --color-accent: #E85D3D;
-  --color-accent-tint: rgba(232, 93, 61, 0.08);
-  --color-accent-border: rgba(232, 93, 61, 0.42);
-  --color-accent-ink: #FFFFFF;
+  --color-accent: #A64229;
+  --color-accent-tint: rgba(166, 66, 41, 0.08);
+  --color-accent-border: rgba(166, 66, 41, 0.42);
+  --color-accent-ink: #FFFCF7;
 
   /* Tuner Lock & Overlay Backdrop */
   --color-ok: #15803D;

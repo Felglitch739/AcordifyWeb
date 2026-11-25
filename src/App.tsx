@@ -8,6 +8,7 @@ import {
 } from './audio';
 import {
   AcordifyLogo,
+  AcordifyWordmark,
   AiInspirationPanel,
   AuthModal,
   CircleOfFifthsView,
@@ -549,12 +550,10 @@ function App() {
                   type="button"
                   onClick={handleGoToLanding}
                   title="Volver a la portada de Acordify"
-                  className="flex items-center gap-1.5 sm:gap-2 cursor-pointer hover:opacity-80 transition-opacity"
+                  className="acordify-brand flex items-center gap-1.5 sm:gap-2 cursor-pointer hover:opacity-80 transition-opacity"
                 >
                   <AcordifyLogo size={24} />
-                  <span className="text-[15px] sm:text-lg font-medium tracking-[-0.02em] text-[var(--color-ink)]">
-                    Acordify
-                  </span>
+                  <AcordifyWordmark />
                 </button>
                 <span className="hidden sm:inline-flex rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-0.5 font-mono text-[10px] uppercase tracking-wider text-[var(--color-ink-muted)]">
                   Guitarra
@@ -573,7 +572,8 @@ function App() {
                       key={tab.id}
                       type="button"
                       onClick={() => handleNavigateSection(tab.id)}
-                      className={`relative px-3.5 py-1.5 rounded-full text-xs font-medium inline-flex items-center gap-1.5 transition-colors cursor-pointer ${
+                      aria-current={active ? 'page' : undefined}
+                      className={`relative min-h-10 px-3.5 rounded-full text-xs font-medium inline-flex items-center gap-1.5 transition-colors cursor-pointer ${
                         active
                           ? 'text-white'
                           : 'text-[var(--color-ink-secondary)] hover:text-[var(--color-ink)]'
@@ -607,10 +607,11 @@ function App() {
                 <button
                   type="button"
                   onClick={handleOpenTuner}
+                  aria-label="Afinador"
                   className="btn-secondary bg-[var(--color-surface)] px-2 sm:px-3.5 py-1 sm:py-1.5 text-[11px] sm:text-xs whitespace-nowrap"
                 >
                   <SlidersHorizontal className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
-                  <span>Afinador</span>
+                  <span className="studio-compact-label">Afinador</span>
                 </button>
 
                 <button
@@ -630,11 +631,12 @@ function App() {
                     <button
                       type="button"
                       onClick={() => setSavedOpen(true)}
+                      aria-label="Mi cuenta"
                       title={`Conectado como ${authUser.name || authUser.email}`}
                       className="btn-secondary bg-[var(--color-surface)] px-2 sm:px-3 py-1 sm:py-1.5 text-[11px] sm:text-xs whitespace-nowrap"
                     >
                       <span className="h-2 w-2 rounded-full bg-[var(--color-ok)] shrink-0" />
-                      <span className="max-w-[54px] sm:max-w-[68px] truncate">
+                      <span className="studio-compact-label max-w-[54px] sm:max-w-[68px] truncate">
                         {(authUser.name || authUser.email).split(/[@\s]/)[0]}
                       </span>
                     </button>
@@ -642,10 +644,11 @@ function App() {
                     <button
                       type="button"
                       onClick={() => setAuthModalOpen(true)}
+                      aria-label="Iniciar sesión"
                       className="btn-secondary bg-[var(--color-surface)] px-2 sm:px-3 py-1 sm:py-1.5 text-[11px] sm:text-xs whitespace-nowrap"
                     >
                       <User className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
-                      <span>Entrar</span>
+                      <span className="studio-compact-label">Entrar</span>
                     </button>
                   )
                 )}
@@ -665,7 +668,8 @@ function App() {
                       key={`mob-${tab.id}`}
                       type="button"
                       onClick={() => handleNavigateSection(tab.id)}
-                      className={`relative py-1.5 rounded-full text-xs font-medium transition-colors cursor-pointer ${
+                      aria-current={active ? 'page' : undefined}
+                      className={`relative min-h-10 rounded-full text-xs font-medium transition-colors cursor-pointer ${
                         active
                           ? 'bg-[var(--color-ink)] text-white'
                           : 'text-[var(--color-ink-secondary)] hover:text-[var(--color-ink)]'
@@ -688,7 +692,7 @@ function App() {
                   initial={{ opacity: 0, y: 4 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, transition: { duration: 0.08 } }}
-                  transition={{ duration: 0.13, ease: [0.22, 1, 0.36, 1] }}
+                  transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
                   className="space-y-8"
                 >
                   <KeyMoodPicker
@@ -746,7 +750,7 @@ function App() {
                   initial={{ opacity: 0, y: 4 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, transition: { duration: 0.08 } }}
-                  transition={{ duration: 0.13, ease: [0.22, 1, 0.36, 1] }}
+                  transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
                 >
                   <CircleOfFifthsView
                     activeKeyRoot={progression.keyRoot}
@@ -762,7 +766,7 @@ function App() {
                   initial={{ opacity: 0, y: 4 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, transition: { duration: 0.08 } }}
-                  transition={{ duration: 0.13, ease: [0.22, 1, 0.36, 1] }}
+                  transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
                 >
                   <ScalePracticeView
                     initialRoot={progression.keyRoot}

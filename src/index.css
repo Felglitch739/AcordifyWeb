@@ -82,6 +82,14 @@
 }
 
 @layer components {
+  .acordify-wordmark {
+    display: inline-block;
+    width: clamp(4.5rem, 12vw, 6.3rem);
+    aspect-ratio: 164 / 44;
+    background: currentColor;
+    mask: url('/acordify-wordmark.svg') center / contain no-repeat;
+  }
+
   .font-editorial {
     font-family: var(--font-editorial);
     font-style: italic;
@@ -219,7 +227,17 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+
   .string-pluck-active {
     animation: none !important;
   }
+}
+
+@media (max-width: 379px) {
+  .acordify-wordmark { width: 4.1rem; }
+}
+
+@media (max-width: 399px) {
+  .studio-compact-label { display: none; }
 }

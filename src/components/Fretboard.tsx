@@ -133,6 +133,16 @@ export const Fretboard: React.FC<FretboardProps> = ({
                   stroke="transparent"
                   strokeWidth="12"
                   className="cursor-pointer"
+                  role="button"
+                  tabIndex={0}
+                  aria-label={`Tocar cuerda ${6 - i} (${STRING_NAMES[i]})`}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      onPluckString(i);
+                    }
+                  }}
                   onClick={(e) => {
                     e.stopPropagation();
                     onPluckString(i);

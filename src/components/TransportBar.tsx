@@ -84,7 +84,7 @@ export const TransportBar: React.FC<TransportBarProps> = ({
     <div className="md:sticky md:top-[72px] z-20 w-full">
       <div
         data-transport-bar="true"
-        className="surface-card bg-white/94 backdrop-blur-md p-3 sm:px-4 sm:py-3 shadow-[0_12px_32px_-14px_rgba(17,17,17,0.16)]"
+        className="surface-card border-[var(--color-border)] bg-[var(--color-surface)] p-3 sm:px-4 sm:py-3 shadow-[0_14px_30px_-18px_rgba(61,39,27,0.28)]"
       >
         {/* Inline Save Form cleanly inside bar */}
         <AnimatePresence initial={false}>
@@ -137,10 +137,11 @@ export const TransportBar: React.FC<TransportBarProps> = ({
             <button
               type="button"
               onClick={onTogglePlay}
-              className={`rounded-full px-4 py-2 text-xs font-medium inline-flex items-center gap-2 transition-colors duration-150 cursor-pointer whitespace-nowrap ${
+              aria-pressed={isPlaying}
+              className={`min-h-11 rounded-full px-4 py-2 text-xs font-medium inline-flex items-center gap-2 transition-colors duration-150 cursor-pointer whitespace-nowrap ${
                 isPlaying
                   ? 'bg-[var(--color-accent)] text-white hover:opacity-90'
-                  : 'bg-[var(--color-ink)] text-white hover:opacity-88'
+                  : 'bg-[#ffc1a7] text-[#382017] hover:bg-[#ffb18f]'
               }`}
             >
               {isPlaying ? (
@@ -252,7 +253,7 @@ export const TransportBar: React.FC<TransportBarProps> = ({
               type="button"
               onClick={onToggleMetronome}
               aria-pressed={metronomeEnabled}
-              className={`rounded-full border px-2.5 sm:px-3 py-1.5 text-xs font-medium inline-flex items-center gap-1.5 transition-colors duration-150 cursor-pointer whitespace-nowrap ${
+              className={`min-h-10 rounded-full border px-2.5 sm:px-3 py-1.5 text-xs font-medium inline-flex items-center gap-1.5 transition-colors duration-150 cursor-pointer whitespace-nowrap ${
                 metronomeEnabled
                   ? 'border-[var(--color-ink)] bg-[var(--color-ink)] text-white'
                   : 'border-[var(--color-border)] bg-transparent text-[var(--color-ink)] hover:border-[var(--color-ink-muted)] hover:bg-[var(--color-surface-subtle)]'
@@ -266,7 +267,7 @@ export const TransportBar: React.FC<TransportBarProps> = ({
               type="button"
               onClick={onToggleCountIn}
               aria-pressed={countInEnabled}
-              className={`rounded-full border px-2.5 sm:px-3 py-1.5 text-xs font-medium inline-flex items-center gap-1.5 transition-colors duration-150 cursor-pointer whitespace-nowrap ${
+              className={`min-h-10 rounded-full border px-2.5 sm:px-3 py-1.5 text-xs font-medium inline-flex items-center gap-1.5 transition-colors duration-150 cursor-pointer whitespace-nowrap ${
                 countInEnabled
                   ? 'border-[var(--color-ink)] bg-[var(--color-ink)] text-white'
                   : 'border-[var(--color-border)] bg-transparent text-[var(--color-ink)] hover:border-[var(--color-ink-muted)] hover:bg-[var(--color-surface-subtle)]'
@@ -279,7 +280,7 @@ export const TransportBar: React.FC<TransportBarProps> = ({
             <button
               type="button"
               onClick={onShare}
-              className="btn-secondary px-2.5 sm:px-3 py-1.5 text-xs whitespace-nowrap"
+              className="btn-secondary min-h-10 px-2.5 sm:px-3 py-1.5 text-xs whitespace-nowrap"
             >
               <Link2 className="w-3.5 h-3.5" />
               <span>Compartir</span>
@@ -289,7 +290,7 @@ export const TransportBar: React.FC<TransportBarProps> = ({
               <button
                 type="button"
                 onClick={openSavePrompt}
-                className="btn-secondary px-3 py-1.5 text-xs whitespace-nowrap border-[var(--color-ink)]"
+                className="btn-secondary min-h-10 px-3 py-1.5 text-xs whitespace-nowrap border-[var(--color-ink)]"
               >
                 <BookmarkPlus className="w-3.5 h-3.5" />
                 <span>Guardar en libreta</span>

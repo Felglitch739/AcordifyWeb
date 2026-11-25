@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import Lenis from 'lenis';
-import { AnimatePresence, motion } from 'motion/react';
-import { ChevronDown, Play, SlidersHorizontal, Square, User, Volume2 } from 'lucide-react';
+import { AnimatePresence, motion, useMotionValue, useReducedMotion, useScroll, useSpring, useTransform } from 'motion/react';
+import { ArrowDown, ArrowUpRight, ChevronDown, Play, SlidersHorizontal, Square, User, Volume2 } from 'lucide-react';
 import { getGuitarChord, type GuitarChordVoicing } from '../data/chords';
 import type { AuthUserSummary } from '../lib/neonAuth';
 import {
@@ -11,8 +10,10 @@ import {
   getHarmonicNeighbors,
   type Mode,
 } from '../theory';
-import { AcordifyLogo } from './AcordifyLogo';
+import { AcordifyLogo, AcordifyWordmark } from './AcordifyLogo';
+import { LandingStrum } from './LandingStrum';
 import { Fretboard } from './Fretboard';
+import './LandingPage.css';
 
 interface LandingPageProps {
   onEnterStudio: (
@@ -94,7 +95,7 @@ const FAQ_ITEMS = [
   },
   {
     q: '¿Funciona en teléfono además de computadora?',
-    a: 'Sí. Cada vista responde desde 390 px de ancho en adelante sin desplazamiento horizontal.',
+    a: 'Sí. Puedes usar los acordes, las escalas y el afinador desde el navegador de tu teléfono.',
   },
 ] as const;
 
@@ -129,8 +130,14 @@ export const LandingPage: React.FC<LandingPageProps> = ({
   const [openFaqIdx, setOpenFaqIdx] = useState<number | null>(0);
 
   const loopTimerRef = useRef<number | null>(null);
-  const lenisRef = useRef<Lenis | null>(null);
-  const activePresetRef = useRef<HeroDemoPreset>(HERO_PRESETS[0]);
+  const heroRef = useRef<HTMLElement>(null);
+  const reducedMotion = useReducedMotion();
+  const { scrollYProgress } = useScroll({ target: heroRef, offset: ['start start', 'end start'] });
+  const photoY = useTransform(scrollYProgress, [0, 1], [0, 145]);
+  const tiltX = useMotionValue(0);
+  const tiltY = useMotionValue(0);
+  const rotateX = useSpring(tiltX, { stiffness: 150, damping: 24 });
+  const rotateY = useSpring(tiltY, { stiffness: 150, damping: 24 });
 
   const activePreset =
     HERO_PRESETS.find((p) => p.id === selectedPresetId) ?? HERO_PRESETS[0];
@@ -159,56 +166,21 @@ export const LandingPage: React.FC<LandingPageProps> = ({
   const scalePreviewBox = useMemo(() => buildScaleBoxes('A', 'minor-pentatonic')[0], []);
 
   useEffect(() => {
-    activePresetRef.current = activePreset;
-  }, [activePreset]);
-
-  // Lenis calibrated smooth scrolling on desktop/mobile (respects prefers-reduced-motion)
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-
-    const lenis = new Lenis({
-      duration: 1.05,
-      easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
-      smoothWheel: true,
+    const sections = NAV_ITEMS.flatMap(({ id }) => {
+      const section = document.getElementById(id);
+      return section ? [section] : [];
     });
-    lenisRef.current = lenis;
-
-    let rafId = 0;
-    const raf = (time: number) => {
-      lenis.raf(time);
-      rafId = window.requestAnimationFrame(raf);
+    const updateNavigation = () => {
+      const current = sections.findLast((section) => section.getBoundingClientRect().top <= window.innerHeight * 0.42);
+      setActiveNav((current?.id as NavId | undefined) ?? null);
     };
-    rafId = window.requestAnimationFrame(raf);
-
+    updateNavigation();
+    window.addEventListener('scroll', updateNavigation, { passive: true });
+    window.addEventListener('resize', updateNavigation);
     return () => {
-      window.cancelAnimationFrame(rafId);
-      lenis.destroy();
-      lenisRef.current = null;
+      window.removeEventListener('scroll', updateNavigation);
+      window.removeEventListener('resize', updateNavigation);
     };
-  }, []);
-
-  // Track active navigation section while scrolling (Smooth guide indicator)
-  useEffect(() => {
-    const sections = NAV_ITEMS.map((item) => document.getElementById(item.id)).filter(
-      (el): el is HTMLElement => Boolean(el),
-    );
-    if (sections.length === 0 || typeof IntersectionObserver === 'undefined') return;
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        const visible = entries
-          .filter((entry) => entry.isIntersecting)
-          .sort((a, b) => b.intersectionRatio - a.intersectionRatio);
-        if (visible[0]?.target?.id) {
-          setActiveNav(visible[0].target.id as NavId);
-        }
-      },
-      { rootMargin: '-25% 0px -55% 0px', threshold: [0.15, 0.45] },
-    );
-
-    sections.forEach((sec) => observer.observe(sec));
-    return () => observer.disconnect();
   }, []);
 
   useEffect(() => {
@@ -243,11 +215,12 @@ export const LandingPage: React.FC<LandingPageProps> = ({
       idx = (idx + 1) % 4;
       setActiveChordIdx(idx);
       setPluckTick((t) => t + 1);
-      onPreviewChord(activePresetRef.current.chords[idx]);
+      onPreviewChord(activePreset.chords[idx]);
     }, 1350);
   };
 
   const handleSelectPreset = (preset: HeroDemoPreset) => {
+    stopLoop();
     setSelectedPresetId(preset.id);
     setActiveChordIdx(0);
     setPluckTick((t) => t + 1);
@@ -255,6 +228,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
   };
 
   const handleSelectHeroChord = (idx: number, symbol: string) => {
+    stopLoop();
     setActiveChordIdx(idx);
     setPluckTick((t) => t + 1);
     onPreviewChord(symbol);
@@ -268,44 +242,18 @@ export const LandingPage: React.FC<LandingPageProps> = ({
     onEnterStudio(section, preset);
   };
 
-  const scrollToSection = (id: NavId) => {
-    setActiveNav(id);
-    const el = document.getElementById(id);
-    if (!el) return;
-    if (lenisRef.current) {
-      lenisRef.current.scrollTo(el, { offset: -72 });
-    } else {
-      el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }
-  };
-
-  const scrollToTop = () => {
-    setActiveNav(null);
-    if (lenisRef.current) {
-      lenisRef.current.scrollTo(0);
-    } else {
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-    }
-  };
-
-  const domComparison = heroNeighbors.dominant.comparison;
-  const firstDiff = domComparison.changedNotes[0];
-
   return (
-    <div className="min-h-screen flex flex-col bg-[var(--color-bg)] text-[var(--color-ink)]">
+    <div className="acordify-landing min-h-screen flex flex-col bg-[var(--color-bg)] text-[var(--color-ink)]" id="portada">
       {/* Top Sticky Bar — Clean Hairline + Smooth Guide Active Underline */}
-      <header className="sticky top-0 z-40 border-b border-[var(--color-border)] bg-[var(--color-bg)]/92 backdrop-blur-md">
-        <div className="mx-auto max-w-[1160px] h-16 px-4 sm:px-8 flex items-center justify-between gap-4">
-          <button
-            type="button"
-            onClick={scrollToTop}
-            className="inline-flex items-center gap-2 shrink-0 cursor-pointer"
+      <header className="landing-header sticky top-0 z-40 backdrop-blur-md">
+        <div className="mx-auto max-w-[1160px] h-16 px-4 sm:px-8 flex items-center justify-between gap-2 sm:gap-4">
+          <a
+            href="#portada"
+            className="acordify-brand inline-flex items-center gap-2 shrink-0 cursor-pointer"
           >
             <AcordifyLogo size={26} />
-            <span className="text-base font-medium tracking-[-0.02em] text-[var(--color-ink)]">
-              Acordify
-            </span>
-          </button>
+            <AcordifyWordmark />
+          </a>
 
           {/* Desktop Section Anchors (Smooth Guide Underline) */}
           <nav
@@ -315,10 +263,10 @@ export const LandingPage: React.FC<LandingPageProps> = ({
             {NAV_ITEMS.map((item) => {
               const active = activeNav === item.id;
               return (
-                <button
+                <a
                   key={item.id}
-                  type="button"
-                  onClick={() => scrollToSection(item.id)}
+                  href={`#${item.id}`}
+                  aria-current={active ? 'location' : undefined}
                   className={`relative h-full inline-flex items-center text-xs font-medium cursor-pointer transition-colors duration-150 ${
                     active
                       ? 'text-[var(--color-ink)]'
@@ -334,7 +282,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                       aria-hidden="true"
                     />
                   )}
-                </button>
+                </a>
               );
             })}
           </nav>
@@ -344,8 +292,11 @@ export const LandingPage: React.FC<LandingPageProps> = ({
             {isAuthConfigured && (
               <button
                 type="button"
-                onClick={onOpenAuth}
-                className="btn-secondary bg-[var(--color-surface)] px-3.5 py-2 text-xs whitespace-nowrap"
+                onClick={() => {
+                  stopLoop();
+                  onOpenAuth();
+                }}
+                className="btn-secondary bg-[var(--color-surface)] px-2.5 sm:px-3.5 py-2 text-xs whitespace-nowrap"
               >
                 {authUser ? (
                   <>
@@ -372,183 +323,112 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                   mode: activePreset.mode,
                 })
               }
-              className="btn-primary px-4 py-2 text-xs whitespace-nowrap"
+              className="landing-cta landing-cta-small"
             >
-              Empezar a practicar
+              Abrir estudio
             </button>
           </div>
         </div>
       </header>
 
       <main className="flex-1">
-        {/* Hero — Statement + Real Interactive Guitar Workbench */}
-        <section className="mx-auto max-w-[1160px] px-4 sm:px-8 pt-10 pb-16 sm:pt-16 sm:pb-24">
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-12 items-center">
-            {/* Editorial Statement (single hero entrance) */}
+
+        <section ref={heroRef} className="landing-hero" aria-labelledby="landing-title">
+          <motion.div className="landing-hero-art" style={{ y: reducedMotion ? 0 : photoY }} aria-hidden="true" />
+          <div className="landing-hero-layout">
             <motion.div
-              initial={{ opacity: 0, y: 12 }}
+              className="landing-intro"
+              initial={reducedMotion ? false : { opacity: 0, y: 18 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
-              className="lg:col-span-6 space-y-6"
+              transition={{ duration: 0.65, ease: [0.22, 1, 0.36, 1] }}
             >
-              <h1 className="text-[44px] sm:text-[64px] lg:text-[76px] font-medium tracking-[-0.035em] leading-[1.02] text-[var(--color-ink)]">
-                Tocas guitarra.
-                <span className="block font-editorial text-[var(--color-ink-secondary)] mt-1">
-                  La teoría no te tiene que frenar.
-                </span>
+              <h1 id="landing-title">
+                Dale forma
+                <em>a tu sonido.</em>
               </h1>
-
-              <p className="text-base sm:text-lg text-[var(--color-ink-secondary)] max-w-lg leading-relaxed">
-                Arma vueltas de 4 acordes con digitación real, conecta tonalidades en el círculo de quintas y practica escalas pentatónicas paso a paso en el navegador, sin cuenta ni muros de pago.
-              </p>
-
-              <div className="flex flex-wrap items-center gap-3 pt-1">
-                <button
-                  type="button"
-                  onClick={() =>
-                    handleEnter('progressions', {
-                      keyRoot: activePreset.keyRoot,
-                      mode: activePreset.mode,
-                    })
-                  }
-                  className="btn-primary px-6 py-3 text-sm"
-                >
-                  Empezar a practicar
+              <p>Prueba qué acordes van juntos, encuentra las notas en el diapasón y escucha tus ideas antes de llevarlas a la guitarra.</p>
+              <div className="landing-actions">
+                <button type="button" className="landing-cta" onClick={() => handleEnter('progressions', activePreset)}>
+                  Abrir el estudio <ArrowUpRight size={18} aria-hidden="true" />
                 </button>
-
-                <button
-                  type="button"
-                  onClick={() =>
-                    handleEnter('circle', {
-                      keyRoot: activePreset.keyRoot,
-                      mode: activePreset.mode,
-                    })
-                  }
-                  className="btn-secondary bg-[var(--color-surface)] px-5 py-3 text-sm"
-                >
-                  Ver el círculo
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    stopLoop();
-                    onOpenTuner();
-                  }}
-                  className="btn-secondary bg-[var(--color-surface)] px-4 py-3 text-sm"
-                >
-                  <SlidersHorizontal className="w-3.5 h-3.5" />
-                  <span>Afinador</span>
+                <button type="button" className="landing-text-button" onClick={() => {
+                  stopLoop();
+                  onOpenTuner();
+                }}>
+                  <SlidersHorizontal size={16} aria-hidden="true" /> Afinador
                 </button>
               </div>
             </motion.div>
 
-            {/* Right Workbench — Real Sounding Chords + Live Interactive Fretboard */}
-            <div className="lg:col-span-6">
-              <div className="surface-card p-5 sm:p-6 space-y-5">
-                {/* Workbench Top Controls */}
-                <div className="flex flex-wrap items-center justify-between gap-3 pb-4 border-b border-[var(--color-border)]">
-                  <div
-                    className="grid grid-cols-2 sm:inline-flex rounded-full bg-[var(--color-surface-subtle)] p-1 gap-0.5"
-                    role="group"
-                    aria-label="Tonalidad de prueba"
-                  >
-                    {HERO_PRESETS.map((preset) => {
-                      const active = preset.id === activePreset.id;
-                      return (
-                        <button
-                          key={preset.id}
-                          type="button"
-                          onClick={() => handleSelectPreset(preset)}
-                          className={`relative rounded-full px-3 py-1.5 text-xs font-medium cursor-pointer transition-colors duration-150 whitespace-nowrap ${
-                            active
-                              ? 'text-[var(--color-ink)]'
-                              : 'text-[var(--color-ink-secondary)] hover:text-[var(--color-ink)]'
-                          }`}
-                        >
-                          {active && (
-                            <motion.span
-                              layoutId="hero-preset-pill"
-                              transition={{ duration: 0.16, ease: [0.22, 1, 0.36, 1] }}
-                              className="absolute inset-0 rounded-full bg-[var(--color-surface)] border border-[var(--color-border)]"
-                              aria-hidden="true"
-                            />
-                          )}
-                          <span className="relative z-10">{preset.label}</span>
-                        </button>
-                      );
-                    })}
+            <motion.div
+              className="landing-deck-scene"
+              initial={reducedMotion ? false : { opacity: 0, y: 24 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.75, delay: 0.1, ease: [0.22, 1, 0.36, 1] }}
+              onPointerMove={(event) => {
+                if (reducedMotion || event.pointerType !== 'mouse') return;
+                const rect = event.currentTarget.getBoundingClientRect();
+                tiltX.set((0.5 - (event.clientY - rect.top) / rect.height) * 7);
+                tiltY.set(((event.clientX - rect.left) / rect.width - 0.5) * 9);
+              }}
+              onPointerLeave={() => {
+                tiltX.set(0);
+                tiltY.set(0);
+              }}
+            >
+              <motion.div className="landing-deck" style={{ rotateX: reducedMotion ? 0 : rotateX, rotateY: reducedMotion ? 0 : rotateY }}>
+                <div className="landing-deck-header">
+                  <div>
+                    <h2>Prueba cuatro acordes</h2>
+                    <p>Toca un acorde o escucha la vuelta.</p>
                   </div>
+                  <div className="landing-meter" aria-hidden="true">
+                    {[14, 23, 13, 32, 20, 29, 13, 21, 10].map((height, index) => (
+                      <span
+                        key={`${pluckTick}-${index}`}
+                        className={pluckTick ? 'is-sounding' : undefined}
+                        style={{ height, animationDelay: `${index * 16}ms` }}
+                      />
+                    ))}
+                  </div>
+                </div>
 
-                  <button
-                    type="button"
-                    onClick={toggleLoop}
-                    className={`rounded-full px-4 py-2 text-xs font-medium inline-flex items-center gap-2 transition-colors duration-150 cursor-pointer whitespace-nowrap ${
-                      isLoopPlaying
-                        ? 'bg-[var(--color-accent)] text-white'
-                        : 'bg-[var(--color-ink)] text-white hover:opacity-90'
-                    }`}
-                  >
-                    {isLoopPlaying ? (
-                      <>
-                        <Square className="w-3 h-3 fill-current" />
-                        <span>Detener</span>
-                      </>
-                    ) : (
-                      <>
-                        <Play className="w-3 h-3 fill-current" />
-                        <span>Escuchar vuelta</span>
-                      </>
-                    )}
+                <div className="landing-deck-controls">
+                  <label className="landing-preset">
+                    <span className="sr-only">Tonalidad de prueba</span>
+                    <select value={activePreset.id} onChange={(event) => {
+                      const preset = HERO_PRESETS.find((item) => item.id === event.target.value);
+                      if (preset) handleSelectPreset(preset);
+                    }}>
+                      {HERO_PRESETS.map((preset) => <option key={preset.id} value={preset.id}>{preset.label}</option>)}
+                    </select>
+                    <ChevronDown size={14} aria-hidden="true" />
+                  </label>
+                  <button type="button" onClick={toggleLoop} className="landing-loop" aria-pressed={isLoopPlaying}>
+                    {isLoopPlaying ? <Square size={13} fill="currentColor" aria-hidden="true" /> : <Play size={13} fill="currentColor" aria-hidden="true" />}
+                    {isLoopPlaying ? 'Detener vuelta' : 'Escuchar vuelta'}
                   </button>
                 </div>
 
-                {/* Middle: 4 Chord Degrees + Real Live Fretboard SVG */}
-                <div className="grid grid-cols-1 sm:grid-cols-12 gap-5 items-center">
-                  <div className="sm:col-span-6 grid grid-cols-2 gap-2.5">
-                    {activePreset.chords.map((chord, idx) => {
-                      const isLit = idx === activeChordIdx;
-                      const voicing = getGuitarChord(chord);
-                      return (
-                        <button
-                          key={`${activePreset.id}-${chord}-${idx}`}
-                          type="button"
-                          onClick={() => handleSelectHeroChord(idx, chord)}
-                          className={`rounded-[12px] border p-3.5 text-left cursor-pointer transition-colors duration-150 ${
-                            isLit
-                              ? 'border-[var(--color-accent)] bg-[var(--color-accent-tint)]'
-                              : 'border-[var(--color-border)] bg-[var(--color-surface-board)] hover:border-[var(--color-ink-muted)]'
-                          }`}
-                        >
-                          <div className="flex items-center justify-between gap-1">
-                            <span className="font-mono text-[11px] font-medium text-[var(--color-ink-muted)]">
-                              {activePreset.numerals[idx]}
-                            </span>
-                            <Volume2
-                              className={`w-3.5 h-3.5 ${
-                                isLit ? 'text-[var(--color-accent)]' : 'text-[var(--color-ink-muted)]'
-                              }`}
-                            />
-                          </div>
-                          <span className="mt-1.5 block text-2xl font-medium text-[var(--color-ink)]">
-                            {chord}
-                          </span>
-                          <span className="mt-0.5 block font-mono text-[10px] uppercase text-[var(--color-ink-secondary)]">
-                            {voicing.difficulty === 'open' ? 'Abierto' : `Traste ${voicing.startFret}`}
-                          </span>
-                        </button>
-                      );
-                    })}
+                <div className="landing-deck-body">
+                  <div className="landing-pads" role="group" aria-label="Acordes de la vuelta">
+                    {activePreset.chords.map((chord, idx) => (
+                      <button
+                        key={idx}
+                        type="button"
+                        aria-pressed={idx === activeChordIdx}
+                        aria-label={`Tocar ${chord}`}
+                        onClick={() => handleSelectHeroChord(idx, chord)}
+                      >
+                        <span>{activePreset.numerals[idx]} <Volume2 size={13} aria-hidden="true" /></span>
+                        <strong>{chord}</strong>
+                      </button>
+                    ))}
                   </div>
-
-                  <div className="sm:col-span-6 flex flex-col items-center justify-center rounded-[12px] border border-[var(--color-border)] bg-[var(--color-surface-board)] p-4">
-                    <div className="w-full flex items-center justify-between mb-1 px-1">
-                      <span className="font-mono text-xs font-medium text-[var(--color-ink)]">
-                        {activeChordSymbol}
-                      </span>
-                      <span className="font-mono text-[11px] text-[var(--color-ink-muted)]">
-                        {activeVoicing.midiNotes.slice(0, 3).join(' · ')}
-                      </span>
+                  <div className="landing-diagram">
+                    <div className="landing-diagram-label">
+                      <strong>{activeChordSymbol}</strong>
+                      <span>Digitación</span>
                     </div>
                     <Fretboard
                       frets={activeVoicing.frets}
@@ -560,69 +440,72 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                       pluckTick={pluckTick}
                       onPluckString={(strIdx) => {
                         const note = getNoteNameForStringIndex(activeVoicing, strIdx);
-                        if (note) onPluckNote(note);
+                        if (note) {
+                          setPluckTick((tick) => tick + 1);
+                          onPluckNote(note);
+                        }
                       }}
                     />
                   </div>
                 </div>
-
-                {/* Computed Harmonic Connection Bar */}
-                <div className="pt-3.5 border-t border-[var(--color-border)] flex flex-wrap items-center justify-between gap-2 text-xs">
-                  <span className="text-[var(--color-ink-secondary)]">
-                    Vecina en quintas:{' '}
-                    <strong className="font-medium text-[var(--color-ink)]">
-                      {heroNeighbors.dominant.root}{' '}
-                      {heroNeighbors.dominant.mode === 'minor' ? 'Menor' : 'Mayor'}
-                    </strong>
-                    {' · '}
-                    {domComparison.sharedChords.length} acordes en común
-                    {firstDiff ? (
-                      <span className="font-mono text-[var(--color-accent)] ml-1.5">
-                        ({firstDiff.removed} → {firstDiff.added})
-                      </span>
-                    ) : null}
-                  </span>
-
-                  <button
-                    type="button"
-                    onClick={() =>
-                      handleEnter('circle', {
-                        keyRoot: activePreset.keyRoot,
-                        mode: activePreset.mode,
-                      })
-                    }
-                    className="font-mono text-[11px] font-medium text-[var(--color-ink)] underline underline-offset-4 hover:text-[var(--color-accent)] cursor-pointer transition-colors duration-150"
-                  >
-                    Abrir en el Círculo
-                  </button>
+                <div className="landing-deck-footer">
+                  <span>Vecina en quintas · <strong>{heroNeighbors.dominant.root} {activePreset.mode === 'minor' ? 'menor' : 'mayor'}</strong></span>
+                  <button type="button" onClick={() => handleEnter('circle', activePreset)}>Explorar <ArrowUpRight size={14} aria-hidden="true" /></button>
                 </div>
-              </div>
-            </div>
+              </motion.div>
+            </motion.div>
+          </div>
+          <div className="landing-hero-footer">
+            <a href="#rasguear">Rasguear cuerdas <ArrowDown size={16} aria-hidden="true" /></a>
+            <span>Practica gratis, sin cuenta</span>
           </div>
         </section>
 
         {/* Tools — Three Interactive Previews Built From the Same Theory Engine */}
         <section
           id="herramientas"
-          className="mx-auto max-w-[1160px] px-4 sm:px-8 pb-20 sm:pb-24 space-y-8"
+          className="landing-tools mx-auto max-w-[1160px] px-4 sm:px-8 pb-20 sm:pb-24 space-y-8"
         >
-          <div className="border-t border-[var(--color-border)] pt-12 flex flex-col sm:flex-row sm:items-end justify-between gap-4">
+          <div className="landing-section-heading">
             <h2 className="text-3xl sm:text-4xl font-medium tracking-[-0.025em] text-[var(--color-ink)]">
-              Tres herramientas en la misma mesa
+              De la primera nota <em>a la siguiente idea.</em>
             </h2>
             <p className="text-sm text-[var(--color-ink-secondary)] max-w-md">
-              Comparten tonalidad, afinador y sonido en tu navegador.
+              Arma una progresión, explora tonalidades cercanas o practica una escala en el diapasón.
             </p>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <section className="landing-strum" id="rasguear" aria-labelledby="strum-title">
+            <div className="landing-strum-intro">
+              <h3 id="strum-title">Rasguea el acorde.</h3>
+              <p>Arrastra el dedo o el cursor entre las cuerdas. También puedes tocarlas una por una.</p>
+              <label>
+                Acorde
+                <select value={activeChordIdx} onChange={(event) => {
+                  const index = Number(event.target.value);
+                  handleSelectHeroChord(index, activePreset.chords[index]);
+                }}>
+                  {activePreset.chords.map((chord, index) => <option key={chord} value={index}>{chord}</option>)}
+                </select>
+              </label>
+            </div>
+            <LandingStrum
+              notes={activeVoicing.frets.map((_, index) => getNoteNameForStringIndex(activeVoicing, index))}
+              onPlay={(note) => {
+                stopLoop();
+                onPluckNote(note);
+              }}
+            />
+          </section>
+
+          <div className="landing-tools-grid grid grid-cols-1 lg:grid-cols-3 gap-5">
             {/* 1. Progresiones Specimen */}
-            <div className="surface-card p-6 flex flex-col justify-between gap-6">
+            <div className="landing-tool-card surface-card p-5 sm:p-6 flex flex-col justify-between gap-6">
               <div className="space-y-4">
                 <div className="flex items-baseline justify-between gap-2 border-b border-[var(--color-border)] pb-3">
                   <h3 className="text-xl font-medium text-[var(--color-ink)]">Progresiones</h3>
                   <span className="font-mono text-xs text-[var(--color-ink-muted)]">
-                    4 compases · BPM
+                    Crea y edita
                   </span>
                 </div>
 
@@ -631,7 +514,10 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                     <button
                       key={sym}
                       type="button"
-                      onClick={() => onPreviewChord(sym)}
+                      onClick={() => {
+                        stopLoop();
+                        onPreviewChord(sym);
+                      }}
                       className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-board)] py-2.5 text-center hover:border-[var(--color-ink)] cursor-pointer transition-colors duration-150"
                     >
                       <span className="block font-mono text-[10px] text-[var(--color-ink-muted)]">
@@ -659,7 +545,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
             </div>
 
             {/* 2. Interactive Circle Specimen */}
-            <div className="surface-card p-6 flex flex-col justify-between gap-6">
+            <div className="landing-tool-card surface-card p-5 sm:p-6 flex flex-col justify-between gap-6">
               <div className="space-y-4">
                 <div className="flex items-baseline justify-between gap-2 border-b border-[var(--color-border)] pb-3">
                   <h3 className="text-xl font-medium text-[var(--color-ink)]">
@@ -671,7 +557,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                 </div>
 
                 <div className="rounded-[12px] border border-[var(--color-border)] bg-[var(--color-surface-board)] p-3 flex items-center gap-4">
-                  <svg viewBox="0 0 100 100" className="w-20 h-20 shrink-0 select-none">
+                  <svg viewBox="0 0 100 100" className="w-[118px] h-auto shrink-0 select-none">
                     <circle cx="50" cy="50" r="44" fill="#FFFFFF" stroke="#E4E4E7" strokeWidth="1" />
                     <circle cx="50" cy="50" r="24" fill="#FAFAFA" stroke="#E4E4E7" strokeWidth="1" />
                     {CIRCLE_POSITIONS.map((pos) => {
@@ -687,14 +573,17 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                           key={pos.index}
                           role="button"
                           tabIndex={0}
+                          aria-pressed={isActive}
                           aria-label={`Previsualizar ${pos.majorRoot} Mayor en el círculo`}
                           onClick={() => {
+                            stopLoop();
                             setPreviewCircleIdx(pos.index);
                             onPreviewChord(pos.majorRoot);
                           }}
                           onKeyDown={(e) => {
                             if (e.key === 'Enter' || e.key === ' ') {
                               e.preventDefault();
+                              stopLoop();
                               setPreviewCircleIdx(pos.index);
                               onPreviewChord(pos.majorRoot);
                             }
@@ -704,8 +593,8 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                           <circle
                             cx={x}
                             cy={y}
-                            r={isActive ? 7.5 : 5.5}
-                            fill={isActive ? '#111111' : isNeighbor ? '#E85D3D' : '#F4F4F5'}
+                            r={8.4}
+                            fill={isActive ? '#231b16' : isNeighbor ? '#a64229' : '#efe9df'}
                           />
                           <text
                             x={x}
@@ -736,13 +625,13 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                 </div>
 
                 <p className="text-sm text-[var(--color-ink-secondary)] leading-relaxed">
-                  Muestra los 7 acordes de cada tono, las vecinas con las que comparte acordes puente y guía de 5 pasos en lenguaje simple.
+                  Toca una tonalidad del círculo para oírla. En el estudio puedes ver qué acordes comparte con sus vecinas.
                 </p>
               </div>
 
               <button
                 type="button"
-                onClick={() => handleEnter('circle')}
+                onClick={() => handleEnter('circle', { keyRoot: circlePreviewPos.majorRoot, mode: 'major' })}
                 className="btn-secondary w-full py-2.5 text-xs bg-[var(--color-surface)]"
               >
                 Explorar el Círculo
@@ -750,7 +639,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
             </div>
 
             {/* 3. Real Box 1 Pentatonic Specimen */}
-            <div className="surface-card p-6 flex flex-col justify-between gap-6">
+            <div className="landing-tool-card surface-card p-5 sm:p-6 flex flex-col justify-between gap-6">
               <div className="space-y-4">
                 <div className="flex items-baseline justify-between gap-2 border-b border-[var(--color-border)] pb-3">
                   <h3 className="text-xl font-medium text-[var(--color-ink)]">Escalas</h3>
@@ -806,12 +695,14 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                           tabIndex={0}
                           aria-label={`Nota ${n.scientificNote}, dedo ${n.finger}`}
                           onClick={() => {
+                            stopLoop();
                             setActiveScaleNoteId(n.id);
                             onPluckNote(n.scientificNote);
                           }}
                           onKeyDown={(e) => {
                             if (e.key === 'Enter' || e.key === ' ') {
                               e.preventDefault();
+                              stopLoop();
                               setActiveScaleNoteId(n.id);
                               onPluckNote(n.scientificNote);
                             }
@@ -840,13 +731,13 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                 </div>
 
                 <p className="text-sm text-[var(--color-ink-secondary)] leading-relaxed">
-                  Las 5 cajas de la pentatónica mayor, menor y blues menor con dedo por traste, orden de subida y bajada y conexión entre cajas.
+                  Toca las notas de la pentatónica de La menor. En el estudio encuentras las cinco posiciones y cómo conectarlas.
                 </p>
               </div>
 
               <button
                 type="button"
-                onClick={() => handleEnter('scales')}
+                onClick={() => handleEnter('scales', { keyRoot: 'A', mode: 'minor' })}
                 className="btn-secondary w-full py-2.5 text-xs bg-[var(--color-surface)]"
               >
                 Practicar Escalas
@@ -855,7 +746,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
           </div>
 
           {/* Chromatic Tuner Row (direct access) */}
-          <div className="border-t border-b border-[var(--color-border)] py-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="landing-tuner flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div className="space-y-1">
               <h3 className="text-base font-medium text-[var(--color-ink)]">
                 Afinador cromático incluido
@@ -883,7 +774,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
           id="origen"
           className="mx-auto max-w-[1160px] px-4 sm:px-8 pb-20 sm:pb-24"
         >
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 border-t border-[var(--color-border)] pt-14 items-start">
+          <div className="landing-origin grid grid-cols-1 lg:grid-cols-12 gap-10 items-start">
             <div className="lg:col-span-7 space-y-4">
               <blockquote className="font-editorial text-3xl sm:text-4xl leading-[1.18] text-[var(--color-ink)]">
                 &ldquo;Tocaba acordes sueltos sin saber qué combinaba ni en qué traste empezaba una pentatónica.&rdquo;
@@ -965,20 +856,23 @@ export const LandingPage: React.FC<LandingPageProps> = ({
 
         {/* Quiet Closing Bar */}
         <section className="mx-auto max-w-[1160px] px-4 sm:px-8 pb-16">
-          <div className="surface-card p-6 sm:p-10 flex flex-col sm:flex-row sm:items-center justify-between gap-6">
+          <div className="landing-close p-6 sm:p-10 flex flex-col sm:flex-row sm:items-center justify-between gap-6">
             <div className="space-y-1.5">
               <h2 className="text-2xl sm:text-3xl font-medium tracking-[-0.025em] text-[var(--color-ink)]">
-                Abre la mesa y arma una vuelta de 4 acordes.
+                ¿Qué vas a tocar hoy?
               </h2>
               <p className="text-sm text-[var(--color-ink-secondary)]">
-                Entra directo al generador sin crear cuenta.
+                Abre el estudio y arma tu primera vuelta de acordes.
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2.5 shrink-0">
               {isAuthConfigured && (
                 <button
                   type="button"
-                  onClick={onOpenAuth}
+                  onClick={() => {
+                  stopLoop();
+                  onOpenAuth();
+                }}
                   className="btn-secondary bg-[var(--color-surface)] px-4 py-2.5 text-xs"
                 >
                   {authUser ? 'Mi cuenta' : 'Sincronizar libreta'}
@@ -987,9 +881,9 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               <button
                 type="button"
                 onClick={() => handleEnter('progressions')}
-                className="btn-primary px-6 py-2.5 text-sm"
+                className="landing-cta"
               >
-                Empezar a practicar
+                Abrir el estudio <ArrowUpRight size={18} aria-hidden="true" />
               </button>
             </div>
           </div>
@@ -998,9 +892,10 @@ export const LandingPage: React.FC<LandingPageProps> = ({
 
       <footer className="border-t border-[var(--color-border)] py-6 px-4 sm:px-8">
         <div className="mx-auto max-w-[1160px] flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-[var(--color-ink-muted)]">
-          <span>
-            Acordify · Progresiones, círculo de quintas, escalas y afinador directo en tu navegador.
-          </span>
+          <a href="#portada" className="acordify-brand inline-flex items-center gap-2">
+            <AcordifyLogo size={24} />
+            <AcordifyWordmark />
+          </a>
           <div className="flex flex-wrap items-center gap-5 font-mono">
             <button
               type="button"

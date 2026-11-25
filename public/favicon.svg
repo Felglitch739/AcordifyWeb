@@ -1,31 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
-  <defs>
-    <clipPath id="pickClip">
-      <path d="M32 10C43.5 10 52 15.2 52 24.5C52 36.2 39.2 50.8 33.4 55C32.5 55.6 31.5 55.6 30.6 55C24.8 50.8 12 36.2 12 24.5C12 15.2 20.5 10 32 10Z" />
-    </clipPath>
-  </defs>
-
-  <rect x="2" y="2" width="60" height="60" rx="14" fill="#111111" />
-
-  <!-- Terracotta Guitar Pick -->
-  <path
-    d="M32 10C43.5 10 52 15.2 52 24.5C52 36.2 39.2 50.8 33.4 55C32.5 55.6 31.5 55.6 30.6 55C24.8 50.8 12 36.2 12 24.5C12 15.2 20.5 10 32 10Z"
-    fill="#E85D3D"
-  />
-
-  <g clip-path="url(#pickClip)">
-    <circle cx="32" cy="27" r="9.2" fill="#111111" />
-    <line x1="10" y1="23.5" x2="54" y2="23.5" stroke="#FFFFFF" stroke-width="1.35" stroke-opacity="0.9" />
-    <line x1="10" y1="27" x2="54" y2="27" stroke="#FFFFFF" stroke-width="1.65" />
-    <line x1="10" y1="30.5" x2="54" y2="30.5" stroke="#FFFFFF" stroke-width="1.2" stroke-opacity="0.85" />
-
-    <path
-      d="M25.5 42.5L32 29.5L38.5 42.5"
-      stroke="#FFFFFF"
-      stroke-width="2.9"
-      stroke-linecap="round"
-      stroke-linejoin="round"
-    />
-    <line x1="27.8" y1="38.2" x2="36.2" y2="38.2" stroke="#FFFFFF" stroke-width="2.3" stroke-linecap="round" />
-  </g>
+  <rect width="64" height="64" rx="15" fill="#261B16"/>
+  <path d="m14 48 14-31a4.4 4.4 0 0 1 8 0l14 31" stroke="#FFAD8B" stroke-width="5.5" stroke-linecap="round"/>
+  <path d="M14 37h21c6 0 10-2 15-8" stroke="#FFE2CE" stroke-width="4.5" stroke-linecap="round"/>
 </svg>

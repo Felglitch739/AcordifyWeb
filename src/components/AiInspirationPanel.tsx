@@ -103,7 +103,7 @@ export const AiInspirationPanel: React.FC<AiInspirationPanelProps> = ({
             </h2>
             <p className="text-sm text-[var(--color-ink-secondary)] mt-1">
               {!aiConfigured
-                ? 'Sugerencia local de rasgueo para esta vuelta. Agrega GEMINI_API_KEY en Vercel para activar versos con IA.'
+                ? 'Prueba un patrón de rasgueo para los acordes de esta vuelta.'
                 : isLocalFallbackResult
                   ? 'Gemini no respondió en este intento; aquí tienes un patrón local para tus acordes y puedes reintentar cuando quieras.'
                   : 'Te sugiero una letra corta para esta vuelta, con tus acordes.'}
