@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { POST } from '../../../api/inspiration';
+import { POST } from '../../../api/inspiration.js';
 import { LOCAL_FALLBACK_NOTICE } from '../localStrumTip';
 import { requestInspiration } from '../geminiClient';
 

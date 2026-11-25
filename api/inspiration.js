@@ -1,16 +1,61 @@
-import { buildLocalStrumFallback, type InspirationRequest } from '../src/lib/localStrumTip.ts';
+const LOCAL_FALLBACK_NOTICE =
+  'La sugerencia con IA no está disponible ahora; esto es un tip local.';
 
-function jsonResponse(body: unknown, status = 200): Response {
+/**
+ * @param {{
+ *   chords: string[];
+ *   keyRoot: string;
+ *   mode: 'major' | 'minor';
+ *   mood: string;
+ *   bpm: number;
+ *   degrees?: number[];
+ *   strumPattern?: 'folk' | 'arpeggio' | 'ballad';
+ *   theme?: string;
+ * }} input
+ */
+function buildLocalStrumFallback(input) {
+  const c0 = input.chords[0] ?? input.keyRoot;
+  const c1 = input.chords[1] ?? c0;
+  const c2 = input.chords[2] ?? c0;
+  const c3 = input.chords[3] ?? c1;
+  const pattern = input.strumPattern ?? 'folk';
+
+  let strumTip;
+  if (pattern === 'arpeggio') {
+    strumTip = `Toca ${c0} y ${c1} en arpegio suave desde el bajo hacia las tres cuerdas agudas, y deja que ${c3} suene abierto medio compás antes de volver a ${c0}.`;
+  } else if (pattern === 'ballad') {
+    strumTip = `A un pulso de ${input.bpm} BPM, da un rasgueo largo hacia abajo en ${c0}, sostén dos tiempos y entra con un toque ligero en ${c2} y ${c3} para enlazar la vuelta.`;
+  } else {
+    strumTip = `Marca el tiempo 1 con golpe hacia abajo en ${c0} y ${c1}, suelta la mano en ${c2} con dos rasgueos arriba cortos, y apaga suave al cerrar en ${c3}.`;
+  }
+
+  return {
+    source: 'fallback',
+    model: null,
+    title: `${c0} · ${c1} · ${c2} · ${c3}`,
+    lyrics: null,
+    strumTip,
+    notice: LOCAL_FALLBACK_NOTICE,
+  };
+}
+
+/**
+ * @param {unknown} body
+ * @param {number} [status=200]
+ * @returns {Response}
+ */
+function jsonResponse(body, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
     headers: { 'Content-Type': 'application/json; charset=utf-8' },
   });
 }
 
-function normalizeInspirationInput(raw: Record<string, unknown>): InspirationRequest | null {
+/** @param {Record<string, unknown>} raw */
+function normalizeInspirationInput(raw) {
   const chords = Array.isArray(raw.chords)
     ? raw.chords
-        .filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
+        .filter((item) => typeof item === 'string' && item.trim().length > 0)
         .map((item) => item.trim())
         .slice(0, 4)
     : [];
@@ -31,7 +76,9 @@ function normalizeInspirationInput(raw: Record<string, unknown>): InspirationReq
       ? Math.max(40, Math.min(200, Math.round(raw.bpm)))
       : 80;
   const degrees = Array.isArray(raw.degrees)
-    ? raw.degrees.filter((d): d is number => typeof d === 'number' && Number.isInteger(d)).slice(0, 4)
+    ? raw.degrees
+        .filter((d) => typeof d === 'number' && Number.isInteger(d))
+        .slice(0, 4)
     : undefined;
   const strumPattern =
     raw.strumPattern === 'arpeggio' || raw.strumPattern === 'ballad' || raw.strumPattern === 'folk'
@@ -45,12 +92,11 @@ function normalizeInspirationInput(raw: Record<string, unknown>): InspirationReq
   return { chords, keyRoot, mode, mood, bpm, degrees, strumPattern, theme };
 }
 
-function buildGeminiPrompt(input: InspirationRequest): string {
+/** @param {NonNullable<ReturnType<typeof normalizeInspirationInput>>} input */
+function buildGeminiPrompt(input) {
   const chordLine = input.chords.join(' - ');
   const degreeText =
-    input.degrees && input.degrees.length > 0
-      ? ` (grados ${input.degrees.join('-')})`
-      : '';
+    input.degrees && input.degrees.length > 0 ? ` (grados ${input.degrees.join('-')})` : '';
   const themeText = input.theme
     ? `Tema elegido por quien toca: "${input.theme}".`
     : 'Elige una escena cotidiana breve (una calle, un cuarto, lluvia, camino, tarde tranquila).';
@@ -59,7 +105,7 @@ function buildGeminiPrompt(input: InspirationRequest): string {
     folk: 'rasgueo acústico folk',
     arpeggio: 'arpegio cuerda por cuerda',
     ballad: 'rasgueo lento de balada',
-  } as const;
+  };
 
   const linesTemplate = input.chords.map((c) => `[${c}] <verso corto en español>`).join('\n');
 
@@ -75,14 +121,18 @@ function buildGeminiPrompt(input: InspirationRequest): string {
   ].join('\n');
 }
 
-function extractGeminiJsonText(payload: Record<string, unknown>): Record<string, unknown> {
+/** @param {Record<string, unknown>} payload */
+function extractGeminiJsonText(payload) {
   const candidates = Array.isArray(payload.candidates) ? payload.candidates : [];
-  const firstCandidate = candidates[0] as Record<string, unknown> | undefined;
-  const content = firstCandidate?.content as Record<string, unknown> | undefined;
+  const firstCandidate =
+    candidates[0] && typeof candidates[0] === 'object' ? candidates[0] : undefined;
+  const content =
+    firstCandidate && typeof firstCandidate.content === 'object'
+      ? firstCandidate.content
+      : undefined;
   const parts = Array.isArray(content?.parts) ? content.parts : [];
   const textPart = parts.find(
-    (p): p is { text: string } =>
-      typeof p === 'object' && p !== null && typeof (p as { text?: unknown }).text === 'string',
+    (p) => typeof p === 'object' && p !== null && typeof p.text === 'string',
   );
 
   if (!textPart) {
@@ -95,23 +145,31 @@ function extractGeminiJsonText(payload: Record<string, unknown>): Record<string,
     .trim();
 
   try {
-    return JSON.parse(cleaned) as Record<string, unknown>;
+    return JSON.parse(cleaned);
   } catch {
     const start = cleaned.indexOf('{');
     const end = cleaned.lastIndexOf('}');
     if (start !== -1 && end > start) {
-      return JSON.parse(cleaned.slice(start, end + 1)) as Record<string, unknown>;
+      return JSON.parse(cleaned.slice(start, end + 1));
     }
     throw new Error('Invalid JSON returned by Gemini');
   }
 }
 
-export async function POST(request: Request): Promise<Response> {
-  let rawBody: Record<string, unknown>;
+/**
+ * @param {Request} request
+ * @returns {Promise<Response>}
+ */
+export async function POST(request) {
+  let rawBody;
   try {
-    rawBody = (await request.json()) as Record<string, unknown>;
+    rawBody = await request.json();
   } catch {
     return jsonResponse({ error: 'Invalid JSON body' }, 400);
+  }
+
+  if (!rawBody || typeof rawBody !== 'object') {
+    return jsonResponse({ error: 'chords array is required' }, 400);
   }
 
   const input = normalizeInspirationInput(rawBody);
@@ -156,12 +214,12 @@ export async function POST(request: Request): Promise<Response> {
       return jsonResponse(buildLocalStrumFallback(input), 200);
     }
 
-    const payload = (await geminiRes.json()) as Record<string, unknown>;
+    const payload = await geminiRes.json();
     const parsed = extractGeminiJsonText(payload);
 
-    const title = typeof parsed.title === 'string' ? parsed.title.trim() : '';
-    const lyrics = typeof parsed.lyrics === 'string' ? parsed.lyrics.trim() : '';
-    const strumTip = typeof parsed.strumTip === 'string' ? parsed.strumTip.trim() : '';
+    const title = typeof parsed?.title === 'string' ? parsed.title.trim() : '';
+    const lyrics = typeof parsed?.lyrics === 'string' ? parsed.lyrics.trim() : '';
+    const strumTip = typeof parsed?.strumTip === 'string' ? parsed.strumTip.trim() : '';
 
     if (!title || !lyrics || !strumTip) {
       return jsonResponse(buildLocalStrumFallback(input), 200);

@@ -1,6 +1,6 @@
 import { defineConfig, loadEnv, type Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
-import { POST as inspirationPost } from './api/inspiration.ts';
+import { POST as inspirationPost } from './api/inspiration.js';
 
 function localApiDevPlugin(): Plugin {
   return {
