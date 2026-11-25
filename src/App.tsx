@@ -1,1082 +1,683 @@
-import { useEffect, useRef, useState, type ChangeEvent } from 'react';
-import type { SongConcept } from './types';
-import { Header, MoodSelector, ChordGrid, ScalePanel, LyricsSheet, TactileButton, LyricsControlPanel, LiveSessionOverlay, SessionVaultPanel, StrumsVisualizer, PanelWrapper, SortableToggle, SongLookup, MobileWorkspace, ToastContainer, TokenDashboard } from './components';
-import useWorkspaceLayout from './hooks/useWorkspaceLayout';
-import { DndContext, PointerSensor, KeyboardSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
-import { SortableContext, rectSortingStrategy, sortableKeyboardCoordinates } from '@dnd-kit/sortable';
-import { completeVerse, generateSongConcept } from './services';
-import { useAudioEngine, useIsMobile, useLiveSession, useLyricsControls, useStorage, useStrumSync, useTheme, useToast } from './hooks';
-import { buildSessionSnapshot, detectKey, parseSessionSnapshot, serializeSessionSnapshot, validateProgression } from './utils';
-import { isLightTheme } from './utils/themeEngine';
+import { useEffect, useState } from 'react';
+import { BookMarked, LogOut, SlidersHorizontal, User } from 'lucide-react';
+import {
+  useProgressionPlayer,
+  type GuitarTone,
+  type StrumPatternId,
+} from './audio';
+import {
+  AcordifyLogo,
+  AiInspirationPanel,
+  AuthModal,
+  KeyMoodPicker,
+  Op1HardwareDeck,
+  ProgressionStrip,
+  SavedProgressionsDrawer,
+  StyleSwitcher,
+  ToastContainer,
+  TransportBar,
+  TunerPanel,
+  VinylRecordHero,
+} from './components';
+import { useToast } from './hooks/useToast';
+import {
+  createCloudProgression,
+  deleteCloudProgression,
+  fetchCloudProgressions,
+  isNeonApiConfigured,
+} from './lib/neonApi';
+import {
+  authClient,
+  getAuthBearerToken,
+  isNeonAuthConfigured,
+  type AuthUserSummary,
+} from './lib/neonAuth';
+import {
+  decodeProgressionFromQuery,
+  deleteProgression,
+  encodeProgressionToQuery,
+  listSavedProgressions,
+  saveProgression,
+  type SavedProgression,
+} from './storage';
+import { StudioStyleProvider } from './styles/StudioStyleContext';
+import {
+  STUDIO_THEMES,
+  persistStudioTheme,
+  readInitialStudioTheme,
+  type StudioThemeId,
+} from './styles/studioThemes';
+import {
+  MAJOR_KEYS,
+  MINOR_KEYS,
+  MOOD_OPTIONS,
+  buildProgressionFromDegrees,
+  generateProgression,
+  noteToSemitone,
+  type DiatonicChord,
+  type GeneratedProgression,
+  type Mode,
+  type MoodId,
+} from './theory';
 
-const MOOD_DATA: Record<string, { chords: string[]; scale: string; lyrics: string; continuation: string }> = {
-  'Jazzy Melancólico': {
-    chords: ['Cmaj7', 'Am9', 'Dm7', 'G13'],
-    scale: 'La Menor Pentatónica (con 9na)',
-    lyrics: `[Cmaj7]Bajo la luz del [Am9]neón apagado,\n[Dm7]busco acordes que [G13]no hagan ruido.\n[Cmaj7]El piano llora un [Am9]tono oxidado,\n[Dm7]mientras se pierde lo [G13]compartido.`,
-    continuation: `\n\n[Cmaj7]La lluvia cae de [Am9]forma síncopada,\n[Dm7]un solo limpio em[G13]pieza a sonar.\n[Cmaj7]En esta noche [Am9]fría y cansada,\n[Dm7]solo nos queda a[G13]prender a esperar.`
-  },
-  'Indie Rock Energético': {
-    chords: ['E5', 'B5', 'C#5', 'A5'],
-    scale: 'Mi Menor Pentatónica / Blues Scale',
-    lyrics: `[E5]Gritos sordos en [B5]la autopista,\n[C#5]cuerdas rotas en el [A5]amplificador.\n[E5]No me llames si [B5]pierdo la pista,\n[C#5]ya no queda rastro [A5]del dolor.`,
-    continuation: `\n\n[E5]Subo el volumen a [B5]ver si me escapo,\n[C#5]distorsión pura en [A5]el corazón.\n[E5]Bajo las reglas de [B5]ningún trato,\n[C#5]somos la rabia de [A5]esta canción.`
-  },
-  'Pop Acústico Relajado': {
-    chords: ['G', 'D/F#', 'Em7', 'Cadd9'],
-    scale: 'Sol Mayor (Escala Diatónica)',
-    lyrics: `[G]El café se enfría en [D/F#]la mañana,\n[Em7]mientras el sol entra por la [Cadd9]ventana.\n[G]No hay prisa si el [D/F#]tiempo se detiene,\n[Em7]lo bueno de la vida [Cadd9]ya se viene.`,
-    continuation: `\n\n[G]Tomo la guitarra y [D/F#]empiezo a cantar,\n[Em7]melodías simples para [Cadd9]despertar.\n[G]Aunque afuera el mundo [D/F#]quiera acelerar,\n[Em7]siempre hay un camino [Cadd9]a donde regresar.`
+function NeonSessionBridge({
+  client,
+  onUserChange,
+}: {
+  client: NonNullable<typeof authClient>;
+  onUserChange: (user: AuthUserSummary | null) => void;
+}) {
+  const session = client.useSession();
+  const userId = session.data?.user?.id ?? null;
+  const userEmail = session.data?.user?.email ?? '';
+  const userName = session.data?.user?.name ?? '';
+
+  useEffect(() => {
+    if (userId) {
+      onUserChange({ id: userId, email: userEmail, name: userName });
+    } else {
+      onUserChange(null);
+    }
+  }, [userId, userEmail, userName, onUserChange]);
+
+  return null;
+}
+
+function resolveKeyForMode(currentRoot: string, nextMode: Mode): string {
+  const pool = nextMode === 'major' ? MAJOR_KEYS : MINOR_KEYS;
+  if (pool.includes(currentRoot)) {
+    return currentRoot;
   }
-};
+
+  try {
+    const targetSemitone = noteToSemitone(currentRoot);
+    const match = pool.find((candidate) => noteToSemitone(candidate) === targetSemitone);
+    if (match) return match;
+  } catch {
+    // Fall back to default root below
+  }
+
+  return pool[0];
+}
+
+function createInitialState(): { progression: GeneratedProgression; bpm: number } {
+  if (typeof window !== 'undefined') {
+    const shared = decodeProgressionFromQuery(window.location.search);
+    if (shared) {
+      return {
+        progression: buildProgressionFromDegrees(
+          shared.keyRoot,
+          shared.mode,
+          shared.mood,
+          shared.degrees,
+          'Progresión compartida',
+        ),
+        bpm: shared.bpm,
+      };
+    }
+  }
+
+  const defaultProg = generateProgression('G', 'major', 'calm', 0);
+  return {
+    progression: defaultProg,
+    bpm: defaultProg.suggestedBpm,
+  };
+}
 
 function App() {
-  const initialMood = 'Jazzy Melancólico';
-  const initialData = MOOD_DATA[initialMood];
+  const [initial] = useState(createInitialState);
+  const [studioStyle, setStudioStyleState] = useState<StudioThemeId>(readInitialStudioTheme);
+  const [progression, setProgression] = useState<GeneratedProgression>(initial.progression);
+  const [variantIndex, setVariantIndex] = useState(0);
+  const [bpm, setBpm] = useState(initial.bpm);
+  const [metronomeEnabled, setMetronomeEnabled] = useState(false);
+  const [countInEnabled, setCountInEnabled] = useState(false);
+  const [guitarTone, setGuitarTone] = useState<GuitarTone>('nylon');
+  const [strumPattern, setStrumPattern] = useState<StrumPatternId>('folk');
+  const [editingSlotIndex, setEditingSlotIndex] = useState<number | null>(null);
 
-  const [concept, setConcept] = useState<SongConcept>({
-    mood: initialMood,
-    chords: initialData.chords,
-    scale: initialData.scale,
-    lyrics: initialData.lyrics,
-    hasContinued: false
-  });
-  const [chordProContent, setChordProContent] = useState(initialData.lyrics);
+  const [tunerOpen, setTunerOpen] = useState(false);
+  const [savedOpen, setSavedOpen] = useState(false);
+  const [authModalOpen, setAuthModalOpen] = useState(false);
+  const [authUser, setAuthUser] = useState<AuthUserSummary | null>(null);
+  const [savedItems, setSavedItems] = useState<SavedProgression[]>(() => listSavedProgressions());
 
-  const [transposeSteps, setTransposeSteps] = useState(0);
-  const [chordVariations, setChordVariations] = useState<number[]>([0, 0, 0, 0]);
-  const [isLoading, setIsLoading] = useState(false);
-  const themeCtx = useTheme();
   const toast = useToast();
-  const [customMood, setCustomMood] = useState('');
-  const [dashboardOpen, setDashboardOpen] = useState(false);
-  const isMobile = useIsMobile();
-  const [toolsOpen, setToolsOpen] = useState(false);
-  
-  interface ModuleConfig {
-    id: string;
-    name: string;
-    isVisible: boolean;
-  }
+  const chordSymbols = progression.slots.map((slot) => slot.chord.symbol);
+  const isCloudMode = Boolean(authUser && isNeonApiConfigured);
 
-  const [modules, setModules] = useState<ModuleConfig[]>([
-    { id: 'control_panel', name: 'CONTROL', isVisible: true },
-    { id: 'song_lookup', name: 'LOOKUP', isVisible: true },
-    { id: 'transposer', name: 'PITCH', isVisible: true },
-    { id: 'chord_monitor', name: 'MONITOR', isVisible: true },
-    { id: 'lyrics_sheet', name: 'SHEET', isVisible: true },
-    { id: 'scale_visualizer', name: 'RECEIVER', isVisible: true }
-  ]);
-
-  const workspaceLayout = useWorkspaceLayout(modules.map(m => m.id), (nextOrder) => {
-    setModules(prev => nextOrder.map(id => prev.find(p => p.id === id) || { id, name: id, isVisible: true }));
-  });
-
-  const [dragActiveId, setDragActiveId] = useState<string | null>(null);
-  const [dragOverId, setDragOverId] = useState<string | null>(null);
-
-  const isTouchDevice = typeof window !== 'undefined' && typeof window.matchMedia === 'function' && window.matchMedia('(pointer: coarse)').matches;
-
-  const isModuleVisible = (id: string) => {
-    return modules.find(m => m.id === id)?.isVisible ?? false;
+  const handleChangeStudioStyle = (nextStyle: StudioThemeId) => {
+    setStudioStyleState(nextStyle);
+    persistStudioTheme(nextStyle);
   };
 
-  const toggleModule = (id: string) => {
-    setModules(prev =>
-      prev.map(m => (m.id === id ? { ...m, isVisible: !m.isVisible } : m))
-    );
-  };
-
-  const handleBypass = (id: string) => {
-    setModules(prev =>
-      prev.map(m => (m.id === id ? { ...m, isVisible: false } : m))
-    );
-  };
-
-  const [isPracticeMode, setIsPracticeMode] = useState(false);
-  const [bpm, setBpm] = useState(90);
-  const [isLedOn, setIsLedOn] = useState(false);
-  const sessionFileInputRef = useRef<HTMLInputElement>(null);
-  const [panelCollapsed, setPanelCollapsed] = useState<Record<string, boolean>>(() => {
-    try {
-      const raw = window.localStorage.getItem('acordify_panels');
-      return raw ? JSON.parse(raw) as Record<string, boolean> : {};
-    } catch {
-      return {};
+  // Sync browser colorScheme & meta theme-color with active world
+  useEffect(() => {
+    const themeMeta = STUDIO_THEMES.find((t) => t.id === studioStyle);
+    if (!themeMeta) return;
+    document.documentElement.style.colorScheme = themeMeta.isDark ? 'dark' : 'light';
+    const metaTag = document.querySelector('meta[name="theme-color"]');
+    if (metaTag) {
+      metaTag.setAttribute('content', themeMeta.themeColor);
     }
-  });
+  }, [studioStyle]);
 
-  const syncNotebookContent = (nextContent: string) => {
-    setChordProContent(nextContent);
-    setConcept(prev => ({
-      ...prev,
-      lyrics: nextContent,
-    }));
-  };
+  useEffect(() => {
+    let cancelled = false;
 
-  const getSafeChords = () => {
-    const hasPlaceholders = concept.chords.some((c) => /LOAD|ERR|SYS_ERR/i.test(c));
-    return hasPlaceholders ? ['C', 'G', 'Am', 'F'] : concept.chords;
-  };
-
-  const handleMapChords = (currentText: string): string => {
-    const safeChords = getSafeChords();
-    let chordIndex = 0;
-    return currentText.split('\n').map((line) => {
-      if (!line.trim()) {
-        return line;
+    async function syncSavedProgressions() {
+      if (authUser && isNeonApiConfigured) {
+        const token = await getAuthBearerToken();
+        if (!token) return;
+        try {
+          const cloudItems = await fetchCloudProgressions(token);
+          if (!cancelled) {
+            setSavedItems(cloudItems);
+          }
+        } catch {
+          if (!cancelled) {
+            setSavedItems(listSavedProgressions());
+          }
+        }
+      } else {
+        setSavedItems(listSavedProgressions());
       }
-      if (/\[[^\]]+\]/.test(line)) {
-        return line;
-      }
-      const chord = safeChords[chordIndex % safeChords.length];
-      chordIndex += 1;
-      return `[${chord}]${line}`;
-    }).join('\n');
-  };
-
-  const handleAssistWithAI = async (currentText: string): Promise<string> => {
-    const rawLines = currentText.split('\n').map((line) => line.trim()).filter(Boolean);
-    if (rawLines.length === 0) {
-      throw new Error('Escribe al menos una linea para continuar.');
     }
 
-    const userLines = rawLines.slice(-4);
-    const linesToComplete = userLines.length <= 2 ? 2 : 4;
-    const safeChords = getSafeChords();
-
-    const result = await completeVerse({
-      userLines,
-      activeChords: safeChords,
-      keyRoot: detected.root,
-      mode: detected.mode,
-      bpm,
-      mood: concept.mood,
-      language: lyricsControls.language,
-      rhymeScheme: lyricsControls.rhymeScheme === 'free' ? 'free' : lyricsControls.rhymeScheme,
-      linesToComplete,
-      styleHint: lyricsControls.genre?.trim() || undefined,
-    });
-
-    const appended = result.completedLines
-      .map((line) => `[${line.chord}]${line.text}`)
-      .join('\n');
-
-    const prefix = currentText.trim().length ? `${currentText.trimEnd()}\n` : '';
-    return `${prefix}${appended}`;
-  };
-
-  const handleSongLookupLoad = (res: import('./services').SongLookupResult) => {
-    if (!res) return;
-
-    if (!res.found) {
-      toast.addToast('error', 'No se encontraron datos confiables.');
-      return;
-    }
-
-    const chords = res.chords ?? [];
-    const keyRoot = (res.keyRoot as any) ?? (chords.length ? detectKey(chords).root : detectKey(concept.chords).root);
-    const mode = (res.mode as any) ?? (chords.length ? detectKey(chords).mode : detectKey(concept.chords).mode);
-
-    // Validate progression
-    let validation;
-    try {
-      validation = validateProgression(chords, keyRoot, mode as any);
-    } catch (e) {
-      validation = undefined;
-    }
-
-    const lowConfidence = (res.confidence ?? 0) < 0.7;
-    const lowCoherence = validation ? validation.overallCoherenceScore < 50 : false;
-
-    if (lowConfidence || lowCoherence) {
-      toast.addToast('warning', '⚠ Acordes aproximados — verifica antes de tocar');
-    } else {
-      toast.addToast('success', `✓ Canción cargada: ${res.title ?? 'Sin título'} — ${res.artist ?? ''}`);
-    }
-
-    // Apply to workspace
-    setBpm(res.bpmSuggested ?? bpm);
-    setChordVariations([0, 0, 0, 0]);
-    syncNotebookContent(res.chordProContent ?? chordProContent);
-    setConcept({
-      mood: concept.mood,
-      chords: chords.length ? chords : concept.chords,
-      scale: `${keyRoot} ${mode === 'major' ? 'Mayor' : 'Menor'}`,
-      lyrics: res.chordProContent ?? chordProContent,
-      hasContinued: true,
-    });
-  };
-
-  const togglePanelCollapsed = (panelId: string) => {
-    setPanelCollapsed(prev => ({
-      ...prev,
-      [panelId]: !prev[panelId],
-    }));
-  };
-
-  const isPanelCollapsed = (panelId: string) => panelCollapsed[panelId] ?? false;
-
-  useEffect(() => {
-    window.localStorage.setItem('acordify_panels', JSON.stringify(panelCollapsed));
-  }, [panelCollapsed]);
-
-  // Theme persistence handled by useTheme hook
-
-  const triggerLedPulse = () => {
-    setIsLedOn(true);
-    setTimeout(() => {
-      setIsLedOn(false);
-    }, 150);
-  };
-
-  const { isPlaying, startPlayback, stopPlayback } = useAudioEngine(
-    concept.chords,
-    transposeSteps,
-    bpm,
-    chordVariations,
-    triggerLedPulse
-  );
-
-  const detected = detectKey(concept.chords);
-  const lyricsControls = useLyricsControls({
-    activeChords: concept.chords,
-    keyRoot: detected.root,
-    mode: detected.mode,
-    bpm,
-    mood: concept.mood,
-  });
-  const strums = useStrumSync({
-    initialMood: concept.mood,
-    bpm,
-  });
-  const liveSession = useLiveSession({
-    chords: concept.chords,
-    bpm,
-  });
-  const storage = useStorage();
-
-  useEffect(() => {
-    strums.setMood(concept.mood);
-  }, [concept.mood]);
-
-  // Synchronized metronome logic
-  useEffect(() => {
-    // If loop player is active, Tone.js drives the LED pulse via callback.
-    // If stopped but practice mode is active, fallback to JS timer.
-    if (!isPracticeMode || isPlaying) {
-      return;
-    }
-
-    const intervalId = setInterval(triggerLedPulse, (60 / bpm) * 1000);
-
+    void syncSavedProgressions();
     return () => {
-      clearInterval(intervalId);
+      cancelled = true;
     };
-  }, [isPracticeMode, isPlaying, bpm]);
+  }, [authUser]);
 
-  const handlePracticeModeToggle = () => {
-    if (isPracticeMode) {
-      setIsPracticeMode(false);
-      if (isPlaying) {
-        stopPlayback();
+  const player = useProgressionPlayer({
+    chordSymbols,
+    bpm,
+    metronomeEnabled,
+    countInEnabled,
+    guitarTone,
+    strumPattern,
+  });
+
+  // Global keyboard shortcuts: Space to Play/Stop loop, Escape to close chord editor
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.code === 'Space' && !e.metaKey && !e.ctrlKey && !e.altKey) {
+        if (tunerOpen || savedOpen || authModalOpen) return;
+        const target = e.target as HTMLElement | null;
+        const tag = target?.tagName?.toUpperCase();
+        if (
+          tag === 'INPUT' ||
+          tag === 'TEXTAREA' ||
+          tag === 'SELECT' ||
+          tag === 'BUTTON' ||
+          target?.isContentEditable
+        ) {
+          return;
+        }
+        e.preventDefault();
+        void player.toggle();
+      } else if (
+        e.key === 'Escape' &&
+        editingSlotIndex !== null &&
+        !tunerOpen &&
+        !savedOpen &&
+        !authModalOpen
+      ) {
+        setEditingSlotIndex(null);
       }
-    } else {
-      setIsPracticeMode(true);
-    }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [player, tunerOpen, savedOpen, authModalOpen, editingSlotIndex]);
+
+  const moodLabel =
+    MOOD_OPTIONS.find((m) => m.id === progression.mood)?.label ?? progression.mood;
+
+  const handleSelectMode = (nextMode: Mode) => {
+    if (nextMode === progression.mode) return;
+    const nextRoot = resolveKeyForMode(progression.keyRoot, nextMode);
+    const nextProg = generateProgression(nextRoot, nextMode, progression.mood, 0);
+    setVariantIndex(0);
+    setEditingSlotIndex(null);
+    setProgression(nextProg);
   };
 
-  const handlePlayLoopToggle = () => {
-    if (isPlaying) {
-      if (liveSession.isLive) {
-        liveSession.stopLive();
-      }
-      stopPlayback();
-      setIsPracticeMode(false);
-    } else {
-      startPlayback();
-      setIsPracticeMode(true);
-    }
+  const handleSelectKey = (nextRoot: string) => {
+    if (nextRoot === progression.keyRoot) return;
+    const nextProg = buildProgressionFromDegrees(
+      nextRoot,
+      progression.mode,
+      progression.mood,
+      progression.degrees,
+      progression.templateName,
+    );
+    setEditingSlotIndex(null);
+    setProgression(nextProg);
   };
 
-  const isPlaybackDisabled = isLoading || concept.chords.some(c => c === 'LOAD' || c === 'ERR' || c === 'SYS_ERR');
+  const handleSelectMood = (nextMood: MoodId) => {
+    const nextProg = generateProgression(progression.keyRoot, progression.mode, nextMood, 0);
+    setVariantIndex(0);
+    setEditingSlotIndex(null);
+    setProgression(nextProg);
+    setBpm(nextProg.suggestedBpm);
+  };
 
-  const handleMoodChange = async (newMood: string) => {
-    setTransposeSteps(0);
-    setChordVariations([0, 0, 0, 0]);
-    setIsLoading(true);
+  const handleNextVariant = () => {
+    const nextVariant = variantIndex + 1;
+    const nextProg = generateProgression(
+      progression.keyRoot,
+      progression.mode,
+      progression.mood,
+      nextVariant,
+    );
+    setVariantIndex(nextVariant);
+    setEditingSlotIndex(null);
+    setProgression(nextProg);
+  };
 
-    // 1. Enter hardware "loading" state
-    setConcept({
-      mood: newMood,
-      chords: ['LOAD', 'LOAD', 'LOAD', 'LOAD'],
-      scale: 'AWAITING AZURE SIGNAL...',
-      lyrics: '\n\n[LOAD]ESTABLECIENDO CONEXIÓN...\n[LOAD]PROCESANDO TIMBRE MENTAL...\n[LOAD]EXTRAYENDO ACORDES...\n[LOAD]ESPERE...',
-      hasContinued: false
+  const handleToggleEditSlot = (slotIndex: number) => {
+    setEditingSlotIndex((prev) => (prev === slotIndex ? null : slotIndex));
+  };
+
+  const handleReplaceChord = (slotIndex: number, newChord: DiatonicChord) => {
+    const nextDegrees = [...progression.degrees];
+    nextDegrees[slotIndex] = newChord.degree;
+
+    const updated = buildProgressionFromDegrees(
+      progression.keyRoot,
+      progression.mode,
+      progression.mood,
+      nextDegrees,
+      'Progresión ajustada',
+    );
+    setProgression(updated);
+    setEditingSlotIndex(null);
+    void player.previewChord(newChord.symbol);
+    toast.addToast('success', `Acorde cambiado a ${newChord.symbol}`);
+  };
+
+  const handleShare = async () => {
+    const query = encodeProgressionToQuery({
+      keyRoot: progression.keyRoot,
+      mode: progression.mode,
+      mood: progression.mood,
+      bpm,
+      degrees: progression.degrees,
     });
-    setChordProContent('\n\n[LOAD]ESTABLECIENDO CONEXIÓN...\n[LOAD]PROCESANDO TIMBRE MENTAL...\n[LOAD]EXTRAYENDO ACORDES...\n[LOAD]ESPERE...');
+
+    const shareUrl = `${window.location.origin}${window.location.pathname}${query}`;
+    try {
+      window.history.replaceState(null, '', query);
+    } catch {
+      // Ignore history restriction in non-browser contexts
+    }
 
     try {
-      // 2. Fetch from AI Service
-      const aiConcept = await generateSongConcept(newMood, lyricsControls.genre, concept.chords);
-      
-      // 3. Update with real signal
-      setConcept({
-        mood: newMood,
-        chords: aiConcept.chords,
-        scale: aiConcept.scale,
-        lyrics: aiConcept.lyrics,
-        hasContinued: false
-      });
-      setChordProContent(aiConcept.lyrics);
-    } catch (err) {
-      console.error(err);
-      // Show connection error in the UI so the user knows the AI failed
-      setConcept({
-        mood: newMood,
-        chords: ['ERR', 'ERR', 'ERR', 'ERR'],
-        scale: 'SYS_ERR: CONNECTION FAILED',
-        lyrics: `\n\n[ERR]ERROR DE CONEXIÓN CON AZURE.\n[ERR]Revisa la consola del navegador (F12) para más detalles.\n[ERR]Asegúrate de que VITE_AZURE_API_KEY y VITE_AZURE_ENDPOINT sean correctos.\n[ERR]y reinicia el servidor con 'npm run dev'.`,
-        hasContinued: false
-      });
-      setChordProContent(`\n\n[ERR]ERROR DE CONEXIÓN CON AZURE.\n[ERR]Revisa la consola del navegador (F12) para más detalles.\n[ERR]Asegúrate de que VITE_AZURE_API_KEY y VITE_AZURE_ENDPOINT sean correctos.\n[ERR]y reinicia el servidor con 'npm run dev'.`);
-    } finally {
-      setIsLoading(false);
+      if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+        await navigator.clipboard.writeText(shareUrl);
+        toast.addToast('success', 'Enlace copiado al portapapeles');
+      } else {
+        toast.addToast('info', 'Enlace actualizado en la barra de direcciones');
+      }
+    } catch {
+      toast.addToast('info', 'Enlace actualizado en la barra de direcciones');
     }
   };
 
-  const handleContinueLyrics = () => {
-    const data = MOOD_DATA[concept.mood];
-    if (data && !concept.hasContinued) {
-      const nextLyrics = chordProContent + data.continuation;
-      syncNotebookContent(nextLyrics);
-      setConcept(prev => ({
-        ...prev,
-        lyrics: nextLyrics,
-        hasContinued: true
-      }));
-    }
-  };
-
-  const handleExportSession = () => {
-    const snapshot = buildSessionSnapshot({
-      title: `${concept.mood} Session`,
-      mood: concept.mood,
+  const handleSave = async (name: string) => {
+    const payload = {
+      name,
+      keyRoot: progression.keyRoot,
+      mode: progression.mode,
+      mood: progression.mood,
       bpm,
-      keyRoot: detected.root,
-      mode: detected.mode,
-      chords: concept.chords,
-      capo: transposeSteps,
-      chordProContent: chordProContent,
-      language: lyricsControls.language,
-      rhymeScheme: lyricsControls.rhymeScheme,
-      transposition: transposeSteps,
-      autoScrollSpeed: isPracticeMode ? 1 : 0,
-    });
+      degrees: progression.degrees,
+      chordSymbols,
+    };
 
-    const json = serializeSessionSnapshot(snapshot);
-    const blob = new Blob([json], { type: 'application/json;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement('a');
-    anchor.href = url;
-    anchor.download = `${snapshot.metadata.title.replace(/\s+/g, '_').toLowerCase()}.acordify.json`;
-    anchor.click();
-    URL.revokeObjectURL(url);
-  };
-
-  const handleImportSessionClick = () => {
-    sessionFileInputRef.current?.click();
-  };
-
-  const handleImportSessionFile = async (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    event.target.value = '';
-
-    if (!file) {
-      return;
+    if (isCloudMode) {
+      const token = await getAuthBearerToken();
+      if (token) {
+        try {
+          const created = await createCloudProgression(token, payload);
+          setSavedItems((prev) => [created, ...prev]);
+          toast.addToast('success', `Guardada en la nube: "${name}"`);
+          return;
+        } catch (err) {
+          toast.addToast(
+            'error',
+            err instanceof Error ? err.message : 'Error al guardar en la nube',
+          );
+          return;
+        }
+      }
     }
 
-    const raw = await file.text();
-    const snapshot = parseSessionSnapshot(raw);
-
-    if (isPlaying) {
-      stopPlayback();
-    }
-
-    if (liveSession.isLive) {
-      liveSession.stopLive();
-    }
-
-    setIsPracticeMode(false);
-    setTransposeSteps(snapshot.player.transposition);
-    setChordVariations([0, 0, 0, 0]);
-    setBpm(snapshot.player.bpm);
-    syncNotebookContent(snapshot.lyrics.chordProContent);
-    setConcept({
-      mood: snapshot.metadata.mood,
-      chords: snapshot.music.chords,
-      scale: `${snapshot.music.keyRoot} ${snapshot.music.mode === 'major' ? 'Mayor' : 'Menor'}`,
-      lyrics: snapshot.lyrics.chordProContent,
-      hasContinued: true,
-    });
+    saveProgression(payload);
+    setSavedItems(listSavedProgressions());
+    toast.addToast('success', `Guardada "${name}"`);
   };
 
-  const handleSaveCurrentSession = async () => {
-    await storage.saveSession(
-      buildSessionSnapshot({
-        title: `${concept.mood} Session`,
-        mood: concept.mood,
-        bpm,
-        keyRoot: detected.root,
-        mode: detected.mode,
-        chords: concept.chords,
-        capo: transposeSteps,
-        chordProContent: chordProContent,
-        language: lyricsControls.language,
-        rhymeScheme: lyricsControls.rhymeScheme,
-        transposition: transposeSteps,
-        autoScrollSpeed: isPracticeMode ? 1 : 0,
-      }),
+  const handleLoadSaved = (item: SavedProgression) => {
+    player.stop();
+    const loaded = buildProgressionFromDegrees(
+      item.keyRoot,
+      item.mode,
+      item.mood,
+      item.degrees,
+      item.name,
     );
+    setProgression(loaded);
+    setBpm(item.bpm);
+    setEditingSlotIndex(null);
+    setSavedOpen(false);
+    toast.addToast('info', `Cargada "${item.name}"`);
   };
 
-  const handleLoadStoredSession = async (id: string) => {
-    const snapshot = await storage.loadSession(id);
-
-    if (isPlaying) {
-      stopPlayback();
+  const handleDeleteSaved = async (id: string) => {
+    if (isCloudMode) {
+      const token = await getAuthBearerToken();
+      if (token) {
+        try {
+          await deleteCloudProgression(token, id);
+          setSavedItems((prev) => prev.filter((item) => item.id !== id));
+          toast.addToast('info', 'Progresión eliminada de la nube');
+          return;
+        } catch (err) {
+          toast.addToast(
+            'error',
+            err instanceof Error ? err.message : 'No se pudo eliminar de la nube',
+          );
+          return;
+        }
+      }
     }
 
-    if (liveSession.isLive) {
-      liveSession.stopLive();
+    const remaining = deleteProgression(id);
+    setSavedItems(remaining);
+    toast.addToast('info', 'Progresión eliminada');
+  };
+
+  const handleOpenTuner = () => {
+    if (player.isPlaying) {
+      player.stop();
     }
-
-    setIsPracticeMode(false);
-    setTransposeSteps(snapshot.player.transposition);
-    setChordVariations([0, 0, 0, 0]);
-    setBpm(snapshot.player.bpm);
-    syncNotebookContent(snapshot.lyrics.chordProContent);
-    setConcept({
-      mood: snapshot.metadata.mood,
-      chords: snapshot.music.chords,
-      scale: `${snapshot.music.keyRoot} ${snapshot.music.mode === 'major' ? 'Mayor' : 'Menor'}`,
-      lyrics: snapshot.lyrics.chordProContent,
-      hasContinued: true,
-    });
+    setTunerOpen(true);
   };
 
-  const handleDeleteStoredSession = async (id: string) => {
-    await storage.deleteSession(id);
+  const handleSignOut = async () => {
+    if (!authClient) return;
+    await authClient.signOut();
+    setAuthUser(null);
+    setSavedItems(listSavedProgressions());
+    toast.addToast('info', 'Sesión cerrada');
   };
 
-  const handleExportBackup = async () => {
-    const backup = await storage.exportBackup();
-    const url = URL.createObjectURL(backup.blob);
-    const anchor = document.createElement('a');
-    anchor.href = url;
-    anchor.download = backup.filename;
-    anchor.click();
-    URL.revokeObjectURL(url);
-  };
+  const defaultSaveName = `${progression.keyRoot} ${
+    progression.mode === 'major' ? 'Mayor' : 'Menor'
+  } · ${moodLabel}`;
 
-  const handleImportBackup = async (file: File) => {
-    await storage.importBackup(file);
-  };
+  const isVinyl = studioStyle === 'vinyl';
+  const isApple = studioStyle === 'apple';
+  const isOp1 = studioStyle === 'op1';
 
-    const isLeftVisible = isModuleVisible('chord_monitor') || isModuleVisible('scale_visualizer');
-    const isRightVisible = isModuleVisible('lyrics_sheet');
-    const light = isLightTheme(themeCtx.currentTheme);
-    const rootClasses = `bg-[var(--bg-primary)] min-h-screen text-[var(--text-primary)] flex flex-col font-sans antialiased selection:bg-[var(--accent-primary)]/30 selection:text-[var(--accent-primary)] relative`;
+  const wordmarkClass = isVinyl
+    ? 'font-poster font-extrabold sm:uppercase tracking-tight'
+    : isOp1
+      ? 'font-hardware font-bold tracking-tight'
+      : isApple
+        ? 'font-semibold tracking-[-0.03em]'
+        : 'font-serif-editorial font-normal';
 
-    const mobileLyrics = (
-      <LyricsSheet
-        lyrics={chordProContent}
-        transposeSteps={transposeSteps}
-        isPracticeMode={isPracticeMode}
-        isLive={liveSession.isLive}
-        activeChord={liveSession.state.activeChord}
-        onLyricsChange={syncNotebookContent}
-        onAssistWithAI={handleAssistWithAI}
-        onMapChords={handleMapChords}
-        availableChords={concept.chords}
-        isMobile
-      />
-    );
+  const headerBtnClass = isVinyl
+    ? 'inline-flex items-center gap-1 sm:gap-1.5 rounded border-2 border-[#141210] bg-[#FFFDF7] px-2 sm:px-3 py-1 sm:py-1.5 text-[11px] sm:text-xs font-mono font-bold text-[#141210] hover:bg-[#D4F350] transition cursor-pointer whitespace-nowrap'
+    : isApple
+      ? 'inline-flex items-center gap-1 sm:gap-1.5 rounded-full border border-black/[0.08] bg-white/80 px-2.5 sm:px-3 py-1 sm:py-1.5 text-[11px] sm:text-xs font-medium text-[#1D1D1F] hover:bg-white shadow-sm transition cursor-pointer whitespace-nowrap'
+      : isOp1
+        ? 'op1-keycap inline-flex items-center gap-1 sm:gap-1.5 rounded-xl px-2 sm:px-3 py-1 sm:py-1.5 text-[11px] sm:text-xs font-mono font-semibold text-[#18191B] cursor-pointer whitespace-nowrap'
+        : 'inline-flex items-center gap-1 sm:gap-1.5 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] px-2 sm:px-3 py-1 sm:py-1.5 text-[11px] sm:text-xs font-medium text-[var(--text-primary)] hover:border-[var(--border-strong)] hover:bg-[var(--bg-surface-elevated)] transition cursor-pointer whitespace-nowrap';
 
-    const mobileTools = (
-      <>
-        <MoodSelector
-          value={concept.mood}
-          onChange={handleMoodChange}
-          customMood={customMood}
-          onCustomMoodChange={setCustomMood}
-        />
-        <LyricsControlPanel
-          rhymeScheme={lyricsControls.rhymeScheme}
-          emotionalMood={lyricsControls.emotionalMood}
-          narrativePerson={lyricsControls.narrativePerson}
-          metaphorDensity={lyricsControls.metaphorDensity}
-          thematicConcept={lyricsControls.thematicConcept}
-          genre={lyricsControls.genre}
-          language={lyricsControls.language}
-          linesToGenerate={lyricsControls.linesToGenerate}
-          isGenerating={lyricsControls.isGenerating}
-          error={lyricsControls.error}
-          result={lyricsControls.result}
-          onRhymeSchemeChange={lyricsControls.setRhymeScheme}
-          onEmotionalMoodChange={lyricsControls.setEmotionalMood}
-          onNarrativePersonChange={lyricsControls.setNarrativePerson}
-          onMetaphorDensityChange={lyricsControls.setMetaphorDensity}
-          onThematicConceptChange={lyricsControls.setThematicConcept}
-          onGenreChange={lyricsControls.setGenre}
-          onLanguageChange={lyricsControls.setLanguage}
-          onLinesToGenerateChange={lyricsControls.setLinesToGenerate}
-          onGenerate={async () => {
-            try {
-              const res = await lyricsControls.generateLyrics();
-              syncNotebookContent(res.chordProOutput);
-              setConcept((prev) => ({
-                ...prev,
-                lyrics: res.chordProOutput,
-                hasContinued: true,
-              }));
-            } catch (e) {
-              console.error('Failed to generate lyrics:', e);
-            }
-          }}
-        />
-        <PanelWrapper
-          className="bg-zinc-800"
-          title={(
-            <label className="text-2xs font-mono font-bold tracking-wider text-zinc-400 uppercase">
-              [PITCH] // SMART TRANSPOSER
-            </label>
-          )}
-          contentClassName="p-4 flex flex-col space-y-3"
+  return (
+    <StudioStyleProvider studioStyle={studioStyle} setStudioStyle={handleChangeStudioStyle}>
+      <div
+        data-studio={studioStyle}
+        data-mood={progression.mood}
+        className={`studio-world-${studioStyle} relative min-h-screen text-[var(--text-primary)] flex flex-col overflow-x-hidden`}
+      >
+        {(studioStyle === 'luthier' || isVinyl) && (
+          <div aria-hidden="true" className="studio-grain" />
+        )}
+
+        {authClient && (
+          <NeonSessionBridge client={authClient} onUserChange={setAuthUser} />
+        )}
+
+        {/* Adaptive 60px Sticky Header */}
+        <header
+          className={`sticky top-0 z-30 h-[58px] sm:h-[60px] backdrop-blur-xl ${
+            isVinyl
+              ? 'border-b-2 border-[#141210] bg-[var(--header-bg)]'
+              : 'border-b border-[var(--border-subtle)] bg-[var(--header-bg)]'
+          }`}
         >
-          <div className="grow flex items-center justify-center space-x-3">
-            <TactileButton variant="zinc" onClick={() => setTransposeSteps(s => s - 1)} className="px-3! py-2! text-2xs!">
-              -1 ST
-            </TactileButton>
-            <div className="bg-zinc-950 px-3 py-2 border border-zinc-800 rounded-sm font-mono text-xs text-amber-500 font-bold uppercase w-24 text-center shadow-inner">
-              CAPO: {transposeSteps > 0 ? `+${transposeSteps}` : transposeSteps}
-            </div>
-            <TactileButton variant="zinc" onClick={() => setTransposeSteps(s => s + 1)} className="px-3! py-2! text-2xs!">
-              +1 ST
-            </TactileButton>
-          </div>
-          <StrumsVisualizer
-            state={strums.state}
-            onPrevPattern={strums.prevPattern}
-            onNextPattern={strums.nextPattern}
-            onTogglePlay={strums.toggle}
-          />
-        </PanelWrapper>
-        <PanelWrapper
-          className="bg-zinc-800"
-          title={(
-            <label className="text-2xs font-mono font-bold tracking-wider text-zinc-400 uppercase">
-              [LOOKUP] // SONG SEARCH
-            </label>
-          )}
-          contentClassName="p-4"
-        >
-          <SongLookup onLoad={handleSongLookupLoad} />
-        </PanelWrapper>
-        <SessionVaultPanel
-          sessions={storage.sessions}
-          isLoading={storage.isLoading}
-          error={storage.error}
-          onSaveCurrent={handleSaveCurrentSession}
-          onLoadSession={handleLoadStoredSession}
-          onDeleteSession={handleDeleteStoredSession}
-          onExportBackup={handleExportBackup}
-          onImportBackup={handleImportBackup}
-          onRefresh={storage.refreshSessions}
-        />
-        <div className="border border-zinc-800 bg-zinc-950 p-3 rounded-sm flex flex-col gap-2">
-          <span className="text-[10px] font-mono uppercase tracking-widest text-zinc-500">[ SESSION IO ]</span>
-          <div className="flex flex-wrap gap-2">
-            <TactileButton variant="zinc" onClick={handleExportSession}>
-              EXPORT JSON
-            </TactileButton>
-            <TactileButton variant="zinc" onClick={handleImportSessionClick}>
-              IMPORT JSON
-            </TactileButton>
-          </div>
-        </div>
-      </>
-    );
-
-    return (
-      <div className={rootClasses}>
-        {!light && (
-          <div
-            className="fixed inset-0 pointer-events-none opacity-[0.035] mix-blend-overlay z-50"
-            style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E")` }}
-          ></div>
-        )}
-
-        {!isMobile && (
-          <Header
-            currentTheme={themeCtx.currentTheme}
-            themes={themeCtx.themes}
-            onSetTheme={themeCtx.setTheme}
-            onPreviewTheme={themeCtx.previewTheme}
-            onResetPreview={themeCtx.resetPreview}
-            isLoading={isLoading}
-            isPlaying={isPlaying}
-            onOpenDashboard={() => setDashboardOpen(true)}
-          />
-        )}
-
-        <ToastContainer toasts={toast.toasts} onDismiss={toast.removeToast} />
-
-        {dashboardOpen && (
-          <TokenDashboard onClose={() => setDashboardOpen(false)} />
-        )}
-
-        {isMobile ? (
-          <MobileWorkspace
-            mood={concept.mood}
-            bpm={bpm}
-            isPlaying={isPlaying}
-            isLive={liveSession.isLive}
-            theme={themeCtx.currentTheme === 'minimal-light' || themeCtx.currentTheme === 'arctic' ? 'minimal' : 'rack'}
-            onToggleTheme={() => {
-              const nextTheme = themeCtx.currentTheme === 'dark-industrial' ? 'minimal-light' : 'dark-industrial';
-              themeCtx.setTheme(nextTheme);
-            }}
-            onTogglePlay={handlePlayLoopToggle}
-            onToggleLive={liveSession.isLive ? liveSession.stopLive : liveSession.startLive}
-            onDecreaseBpm={() => setBpm((prev) => Math.max(40, prev - 5))}
-            onIncreaseBpm={() => setBpm((prev) => Math.min(240, prev + 5))}
-            toolsOpen={toolsOpen}
-            onToggleTools={() => setToolsOpen((prev) => !prev)}
-            onCloseTools={() => setToolsOpen(false)}
-            toolsContent={mobileTools}
-            lyricsContent={mobileLyrics}
-          />
-        ) : (
-          <>
-            {/* Workspace Desk Manager Panel */}
-            <div className="w-full border-b border-[var(--border-color)] bg-[var(--bg-primary)] px-4 md:px-6 py-3 flex flex-col sm:flex-row items-center justify-between select-none space-y-2.5 sm:space-y-0 shadow-inner z-10">
-              <div className="flex items-center space-x-2">
-                <span className="text-[10px] font-mono font-bold tracking-widest text-[var(--text-secondary)] uppercase">
-                  [ WORKSPACE DESK MANAGER ]
+          <div className="mx-auto max-w-6xl h-full px-3 sm:px-6 flex items-center justify-between gap-2 sm:gap-4">
+            <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
+              <AcordifyLogo size={28} theme={studioStyle} className="sm:w-8 sm:h-8" />
+              <div className="flex items-baseline gap-2.5">
+                <h1
+                  className={`${
+                    isVinyl ? 'text-base sm:text-xl' : 'text-lg sm:text-2xl'
+                  } text-[var(--text-primary)] leading-none whitespace-nowrap ${wordmarkClass}`}
+                >
+                  Acordify
+                </h1>
+                <span className="hidden lg:inline-block xl:hidden text-xs text-[var(--text-muted)]">
+                  Estudio acústico
                 </span>
               </div>
-              
-              <div className="flex flex-wrap items-center justify-center gap-2.5">
-                {/* Screen-reader instructions for keyboard DnD */}
-                <div id="workspace-dnd-instructions" className="sr-only">
-                  Usa Barra espaciadora para levantar, Flechas para mover, Esc para cancelar.
-                </div>
-                {!isTouchDevice ? (
-                  <DndContext
-                    sensors={useSensors(useSensor(PointerSensor), useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }))}
-                    onDragStart={(ev) => setDragActiveId(String(ev.active.id))}
-                    onDragOver={(ev) => setDragOverId(ev.over ? String(ev.over.id) : null)}
-                    onDragEnd={(event: DragEndEvent) => {
-                      const { active, over } = event;
-                      setDragActiveId(null);
-                      setDragOverId(null);
-                      if (!over) return;
-                      workspaceLayout.handleDragEnd(String(active.id), String(over.id));
-                    }}
-                    onDragCancel={() => { setDragActiveId(null); setDragOverId(null); }}
-                  >
-                    <SortableContext items={modules.map(m => m.id)} strategy={rectSortingStrategy}>
-                      {modules.map((mod) => (
-                        <div key={mod.id} className="relative">
-                          {/* Drop placeholder appears before the hovered target */}
-                          {dragOverId === mod.id && dragActiveId && dragActiveId !== mod.id && (
-                            <div className="absolute -top-3 left-0 right-0 flex justify-center pointer-events-none">
-                              <div className="bg-amber-500/10 backdrop-blur-sm rounded-full px-2 py-0.5 shadow-md transition-all duration-200 ease-out transform -translate-y-1 opacity-100">
-                                <svg width="18" height="10" viewBox="0 0 24 14" fill="none" xmlns="http://www.w3.org/2000/svg" className="text-amber-400">
-                                  <path d="M2 7h18" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                                  <path d="M12 1l6 6-6 6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                                </svg>
-                              </div>
-                            </div>
-                          )}
-
-                          <SortableToggle key={mod.id} id={mod.id}>
-                            <div className={`transition-all duration-200 ${dragOverId === mod.id ? 'ring-2 ring-amber-500/30 shadow-[0_8px_20px_rgba(245,158,11,0.12)] scale-102' : ''}`}>
-                              <button
-                                type="button"
-                                onClick={() => toggleModule(mod.id)}
-                                className={`flex items-center space-x-2 px-2.5 py-1 border rounded-sm font-mono text-[9px] uppercase tracking-wider font-semibold select-none transition-all duration-150 cursor-pointer ${
-                                  mod.isVisible
-                                    ? 'bg-zinc-900 text-stone-200 border-zinc-700 hover:bg-zinc-800 hover:border-zinc-600'
-                                    : 'bg-zinc-950 text-zinc-600 border-zinc-900 hover:bg-zinc-900'
-                                }`}
-                              >
-                                <div 
-                                  className={`w-1.5 h-1.5 rounded-full transition-all duration-75 ${
-                                    mod.isVisible 
-                                      ? 'bg-emerald-500 shadow-[0_0_6px_#10b981]' 
-                                      : 'bg-red-700/50'
-                                  }`}
-                                ></div>
-                                <span>
-                                  {mod.isVisible ? `[ON] ${mod.name}` : `[OFF] ${mod.name}`}
-                                </span>
-                              </button>
-                            </div>
-                          </SortableToggle>
-                        </div>
-                      ))}
-                    </SortableContext>
-                  </DndContext>
-                ) : (
-                  // Touch devices: render static controls without drag handles
-                  modules.map(mod => (
-                    <div key={mod.id} className="inline-block">
-                      <button
-                        type="button"
-                        onClick={() => toggleModule(mod.id)}
-                        className={`flex items-center space-x-2 px-2.5 py-1 border rounded-sm font-mono text-[9px] uppercase tracking-wider font-semibold select-none transition-all duration-100 cursor-pointer ${
-                          mod.isVisible
-                            ? 'bg-zinc-900 text-stone-200 border-zinc-700 hover:bg-zinc-800 hover:border-zinc-600'
-                            : 'bg-zinc-950 text-zinc-600 border-zinc-900 hover:bg-zinc-900'
-                        }`}
-                      >
-                        <div 
-                          className={`w-1.5 h-1.5 rounded-full transition-all duration-75 ${
-                            mod.isVisible 
-                              ? 'bg-emerald-500 shadow-[0_0_6px_#10b981]' 
-                              : 'bg-red-700/50'
-                          }`}
-                        ></div>
-                        <span>
-                          {mod.isVisible ? `[ON] ${mod.name}` : `[OFF] ${mod.name}`}
-                        </span>
-                      </button>
-                    </div>
-                  ))
-                )}
-              </div>
             </div>
-    
-            {/* Main Screen Layout */}
-            <main className="max-w-7xl w-full mx-auto p-4 md:p-6 lg:p-8 grow flex flex-col space-y-8">
-          
-          {/* Top Control Panel: Mood, Smart Transposer & Practice Engine */}
-          <div className="flex flex-wrap gap-6 items-start">
-            {isModuleVisible('control_panel') && (
-              <div className="grow min-w-75 md:flex-[2_2_0%]">
-                <MoodSelector 
-                  value={concept.mood} 
-                  onChange={handleMoodChange}
-                  customMood={customMood}
-                  onCustomMoodChange={setCustomMood}
-                  onBypass={() => handleBypass('control_panel')}
-                  collapsed={isPanelCollapsed('mood_selector')}
-                  onToggleCollapse={() => togglePanelCollapsed('mood_selector')}
-                />
 
-                <div className="mt-4">
-                  <LyricsControlPanel
-                    rhymeScheme={lyricsControls.rhymeScheme}
-                    emotionalMood={lyricsControls.emotionalMood}
-                    narrativePerson={lyricsControls.narrativePerson}
-                    metaphorDensity={lyricsControls.metaphorDensity}
-                    thematicConcept={lyricsControls.thematicConcept}
-                    genre={lyricsControls.genre}
-                    language={lyricsControls.language}
-                    linesToGenerate={lyricsControls.linesToGenerate}
-                    isGenerating={lyricsControls.isGenerating}
-                    error={lyricsControls.error}
-                    result={lyricsControls.result}
-                    onRhymeSchemeChange={lyricsControls.setRhymeScheme}
-                    onEmotionalMoodChange={lyricsControls.setEmotionalMood}
-                    onNarrativePersonChange={lyricsControls.setNarrativePerson}
-                    onMetaphorDensityChange={lyricsControls.setMetaphorDensity}
-                    onThematicConceptChange={lyricsControls.setThematicConcept}
-                    onGenreChange={lyricsControls.setGenre}
-                    onLanguageChange={lyricsControls.setLanguage}
-                    onLinesToGenerateChange={lyricsControls.setLinesToGenerate}
-                    onGenerate={async () => {
-                      try {
-                        const res = await lyricsControls.generateLyrics();
-                        console.log('[App] generateLyrics returned:', res);
-                        syncNotebookContent(res.chordProOutput);
-                        setConcept((prev) => ({
-                          ...prev,
-                          lyrics: res.chordProOutput,
-                          hasContinued: true,
-                        }));
-                      } catch (e) {
-                        console.error('Failed to generate lyrics:', e);
-                      }
-                    }}
-                    onBypass={() => handleBypass('control_panel')}
-                    collapsed={isPanelCollapsed('lyrics_controls')}
-                    onToggleCollapse={() => togglePanelCollapsed('lyrics_controls')}
-                  />
-                </div>
-                
-                <div className="mt-4">
-                  <PanelWrapper
-                    title={(
-                      <label className="text-2xs font-mono font-bold tracking-wider text-zinc-400 uppercase">[LOOKUP] // SONG SEARCH</label>
-                    )}
-                    collapsed={isPanelCollapsed('song_lookup')}
-                    onToggleCollapse={() => togglePanelCollapsed('song_lookup')}
-                    onBypass={() => handleBypass('song_lookup')}
-                    contentClassName="p-4"
-                  >
-                    <SongLookup onLoad={handleSongLookupLoad} />
-                  </PanelWrapper>
-                </div>
-              </div>
-            )}
+            {/* Desktop Inline 4-Style Switcher */}
+            <div className="hidden xl:flex items-center justify-center">
+              <StyleSwitcher />
+            </div>
 
-            {isModuleVisible('transposer') && (
-              <PanelWrapper
-                className="grow min-w-50 md:flex-1 bg-zinc-800"
-                collapsed={isPanelCollapsed('transposer')}
-                onToggleCollapse={() => togglePanelCollapsed('transposer')}
-                onBypass={() => handleBypass('transposer')}
-                title={(
-                  <label className="text-2xs font-mono font-bold tracking-wider text-zinc-400 uppercase">
-                    [PITCH] // SMART TRANSPOSER
-                  </label>
-                )}
-                contentClassName="p-4 flex flex-col space-y-3"
+            <div className="flex items-center gap-1 sm:gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={handleOpenTuner}
+                aria-label="Afinador"
+                className={headerBtnClass}
               >
-                <div className="grow flex items-center justify-center space-x-3">
-                  <TactileButton variant="zinc" onClick={() => setTransposeSteps(s => s - 1)} className="px-3! py-2! text-2xs!">
-                    -1 ST
-                  </TactileButton>
-                  <div className="bg-zinc-950 px-3 py-2 border border-zinc-800 rounded-sm font-mono text-xs text-amber-500 font-bold uppercase w-24 text-center shadow-inner">
-                    CAPO: {transposeSteps > 0 ? `+${transposeSteps}` : transposeSteps}
-                  </div>
-                  <TactileButton variant="zinc" onClick={() => setTransposeSteps(s => s + 1)} className="px-3! py-2! text-2xs!">
-                    +1 ST
-                  </TactileButton>
-                </div>
-                <StrumsVisualizer
-                  state={strums.state}
-                  onPrevPattern={strums.prevPattern}
-                  onNextPattern={strums.nextPattern}
-                  onTogglePlay={strums.toggle}
-                  onBypass={() => handleBypass('transposer')}
-                />
-              </PanelWrapper>
-            )}
+                <SlidersHorizontal className="w-3.5 h-3.5 text-[var(--mood-accent)] shrink-0" />
+                <span className="sm:hidden">Afinar</span>
+                <span className="hidden sm:inline">Afinador</span>
+              </button>
 
-            <div className="grow min-w-50 md:flex-1">
-              <SessionVaultPanel
-                sessions={storage.sessions}
-                isLoading={storage.isLoading}
-                error={storage.error}
-                onSaveCurrent={handleSaveCurrentSession}
-                onLoadSession={handleLoadStoredSession}
-                onDeleteSession={handleDeleteStoredSession}
-                onExportBackup={handleExportBackup}
-                onImportBackup={handleImportBackup}
-                onRefresh={storage.refreshSessions}
-              />
-            </div>
-  
-            {/* Practice Engine Module - Always Visible */}
-              <div className="grow min-w-50 md:flex-1 border border-zinc-700 bg-zinc-800 p-4 rounded-sm flex flex-col space-y-3 shadow-md select-none justify-between">
-              <div className="flex items-center justify-between border-b border-zinc-700 pb-2">
-                <label className="text-2xs font-mono font-bold tracking-wider text-zinc-400 uppercase">
-                  [SESSION] // PRACTICE ENGINE
-                </label>
-                <div className="flex items-center space-x-1.5">
-                  <span className="text-[10px] font-mono text-zinc-500 uppercase">LED</span>
-                  <div 
-                    className={`w-3 h-3 rounded-full transition-all duration-75 ${
-                      isPracticeMode && isLedOn 
-                        ? 'bg-orange-500 shadow-[0_0_8px_#f97316]' 
-                        : 'bg-zinc-800'
-                    }`}
-                  ></div>
-                </div>
-              </div>
-              <div className="flex flex-col space-y-3 grow justify-center">
-                <TactileButton 
-                  variant={isPracticeMode ? 'orange' : 'zinc'} 
-                  onClick={handlePracticeModeToggle}
-                  className={`py-1.5 text-xs font-bold font-mono tracking-widest ${
-                    isPracticeMode ? 'bg-orange-500! text-zinc-950! hover:bg-orange-400!' : ''
-                  }`}
-                >
-                  {isPracticeMode ? '[ ACTIVE ]' : '[ PRACTICE MODE ]'}
-                </TactileButton>
-                <LiveSessionOverlay
-                  state={liveSession.state}
-                  onToggle={liveSession.isLive ? liveSession.stopLive : liveSession.startLive}
-                  onSetChordDuration={liveSession.setChordDuration}
-                />
-                <div className="flex items-center justify-center space-x-2">
-                  <TactileButton 
-                    variant="zinc" 
-                    onClick={() => setBpm(b => Math.max(40, b - 5))} 
-                    className="px-2! py-1! text-2xs! font-mono"
-                  >
-                    -5
-                  </TactileButton>
-                  <div className="grow bg-zinc-950 px-2 py-1 border border-zinc-800 rounded-sm font-mono text-xs text-amber-500 font-bold uppercase text-center shadow-inner flex items-center justify-center space-x-1">
-                    <span>{bpm}</span>
-                    <span className="text-[9px] text-zinc-600">BPM</span>
+              <button
+                type="button"
+                onClick={() => setSavedOpen(true)}
+                aria-label="Libreta de progresiones guardadas"
+                className={headerBtnClass}
+              >
+                <BookMarked className="w-3.5 h-3.5 text-[var(--text-secondary)] shrink-0" />
+                <span className="hidden sm:inline">Libreta</span>
+                <span className="rounded-full bg-[var(--bg-recessed)] border border-[var(--border-subtle)] px-1.5 py-0.5 font-mono text-[10px] text-[var(--mood-accent)] num-tabular leading-none">
+                  {savedItems.length}
+                </span>
+              </button>
+
+              {isNeonAuthConfigured && (
+                authUser ? (
+                  <div className="flex items-center gap-1.5">
+                    <span className="hidden sm:inline-flex items-center gap-1.5 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] px-2.5 py-1.5 text-xs text-[var(--text-secondary)] max-w-[150px] truncate">
+                      <User className="w-3.5 h-3.5 text-[var(--mood-accent)] shrink-0" />
+                      <span className="truncate">{authUser.name || authUser.email}</span>
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => void handleSignOut()}
+                      title="Cerrar sesión"
+                      className={headerBtnClass}
+                    >
+                      <LogOut className="w-3.5 h-3.5" />
+                      <span className="hidden sm:inline">Salir</span>
+                    </button>
                   </div>
-                  <TactileButton 
-                    variant="zinc" 
-                    onClick={() => setBpm(b => Math.min(240, b + 5))} 
-                    className="px-2! py-1! text-2xs! font-mono"
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setAuthModalOpen(true)}
+                    className={`px-2.5 sm:px-3.5 py-1 sm:py-1.5 text-[11px] sm:text-xs font-semibold transition cursor-pointer whitespace-nowrap ${
+                      isVinyl
+                        ? 'rounded border-2 border-[#141210] bg-[var(--mood-accent)] text-[var(--accent-ink)] font-mono uppercase'
+                        : isApple
+                          ? 'rounded-full bg-[var(--mood-accent)] text-[var(--accent-ink)] shadow-sm hover:brightness-110'
+                          : 'rounded-xl border border-[var(--mood-border)] bg-[var(--mood-tint)] text-[var(--mood-accent)] hover:brightness-110'
+                    }`}
                   >
-                    +5
-                  </TactileButton>
-                </div>
-              </div>
+                    <span className="sm:hidden">Entrar</span>
+                    <span className="hidden sm:inline">Iniciar sesión</span>
+                  </button>
+                )
+              )}
             </div>
           </div>
-  
-          {/* Studio Rack Grid Layout */}
-          {(isLeftVisible || isRightVisible) ? (
-            <div className={`grid gap-6 items-start ${
-              isLeftVisible && isRightVisible 
-                ? 'grid-cols-1 lg:grid-cols-2' 
-                : 'grid-cols-1'
-            }`}>
-              
-              {/* Left Column: Chords Console & Solo Tuning */}
-              {isLeftVisible && (
-                <div className="flex flex-col space-y-6">
-                  {/* Chords Visualiser */}
-                  {isModuleVisible('chord_monitor') && (
-                    <ChordGrid 
-                      chords={concept.chords} 
-                      transposeSteps={transposeSteps} 
-                      variationIndices={chordVariations}
-                      onVariationChange={(chordIdx, newVarIdx) => {
-                        const nextVars = [...chordVariations];
-                        nextVars[chordIdx] = newVarIdx;
-                        setChordVariations(nextVars);
-                      }}
-                      onBypass={() => handleBypass('chord_monitor')}
-                      collapsed={isPanelCollapsed('chord_monitor')}
-                      onToggleCollapse={() => togglePanelCollapsed('chord_monitor')}
-                    />
-                  )}
-                  
-                  {/* Fretboard Tuning / Solo Scale */}
-                  {isModuleVisible('scale_visualizer') && (
-                    <ScalePanel 
-                      scale={concept.scale} 
-                      onBypass={() => handleBypass('scale_visualizer')}
-                      collapsed={isPanelCollapsed('scale_visualizer')}
-                      onToggleCollapse={() => togglePanelCollapsed('scale_visualizer')}
-                    />
-                  )}
-      
-                  {/* Extra Hardware/Rack details for visual premium texture */}
-                  <div className="border border-[var(--border-color)] bg-[var(--bg-primary)] p-4 rounded-sm flex justify-between items-center text-3xs font-mono text-[var(--text-muted)]">
-                    <div className="flex space-x-3">
-                      <span>RACK: 01A</span>
-                      <span>PATCH: COLD-STATE</span>
-                      <span className={isLoading ? 'text-[var(--accent-primary)] animate-pulse' : isPlaying ? 'text-[var(--accent-secondary)]' : ''}>
-                        STATUS: {isLoading ? 'GENERATING' : isPlaying ? 'ACTIVE' : 'READY'}
-                      </span>
-                    </div>
-                    <div className={`w-1.5 h-1.5 ${isLoading ? 'bg-[var(--accent-primary)] animate-ping' : isPlaying ? 'bg-[var(--accent-secondary)] animate-pulse' : 'bg-[var(--status-active)]'}`}></div>
-                  </div>
-                </div>
-              )}
-      
-              {/* Right Column: Lyrics Sheet and Action Deck */}
-              {isRightVisible && (
-                <div className="flex flex-col space-y-4 h-full justify-between">
-                  {/* Sheet showing monospace typography */}
-                  <div className="grow">
-                    <LyricsSheet 
-                      lyrics={chordProContent} 
-                      transposeSteps={transposeSteps} 
-                      isPracticeMode={isPracticeMode}
-                      isLive={liveSession.isLive}
-                      activeChord={liveSession.state.activeChord}
-                      onLyricsChange={syncNotebookContent}
-                      onAssistWithAI={handleAssistWithAI}
-                      onMapChords={handleMapChords}
-                      availableChords={concept.chords}
-                      onBypass={() => handleBypass('lyrics_sheet')}
-                      collapsed={isPanelCollapsed('lyrics_sheet')}
-                      onToggleCollapse={() => togglePanelCollapsed('lyrics_sheet')}
-                    />
-                  </div>
-      
-                  {/* Actions Controller deck */}
-                  <div className="border border-[var(--border-color)] bg-[var(--bg-tertiary)] p-4 rounded-sm shadow-md flex flex-col space-y-3">
-                    <span className="text-xs font-mono text-[var(--text-muted)] uppercase tracking-wider">
-                      [SEQUENCER CONTROL] {isPlaying ? 'BACKING LOOP RUNNING' : 'LOOP PLAYER & WRITER DECK'}
-                    </span>
-      
-                    <div className="flex items-center gap-3">
-                      <TactileButton
-                        variant={isPlaying ? 'red' : 'green'}
-                        onClick={handlePlayLoopToggle}
-                        disabled={isPlaybackDisabled}
-                        className="font-bold flex-1"
-                      >
-                        {isPlaying ? 'STOP LOOP' : 'PLAY LOOP'}
-                      </TactileButton>
+        </header>
 
-                      <TactileButton
-                        variant={concept.hasContinued ? 'zinc' : 'orange'}
-                        onClick={handleContinueLyrics}
-                        disabled={concept.hasContinued}
-                        className="flex-1"
-                      >
-                        {concept.hasContinued ? 'LETRA COMPLETADA' : 'CONTINUAR LETRA'}
-                      </TactileButton>
-
-                      <TactileButton
-                        variant="zinc"
-                        onClick={handleExportSession}
-                        className="font-bold flex-1"
-                      >
-                        EXPORT JSON
-                      </TactileButton>
-
-                      <TactileButton
-                        variant="zinc"
-                        onClick={handleImportSessionClick}
-                        className="font-bold flex-1"
-                      >
-                        IMPORT JSON
-                      </TactileButton>
-                    </div>
-                  </div>
-
-                </div>
-              )}
+        {/* Responsive Style Switcher Ribbon (< xl viewports) */}
+        <div className="xl:hidden relative z-20 border-b border-[var(--border-subtle)] bg-[var(--header-bg)]/80 backdrop-blur-md">
+          <div className="mx-auto max-w-6xl px-3 sm:px-6 py-2 flex items-center justify-between gap-2 overflow-x-auto">
+            <span className="text-[11px] font-mono uppercase tracking-wider text-[var(--text-muted)] shrink-0 hidden sm:inline">
+              Estilo UI:
+            </span>
+            <div className="mx-auto sm:mx-0">
+              <StyleSwitcher compact />
             </div>
+          </div>
+        </div>
+
+        {/* Main Adaptive Studio Workspace */}
+        <main className="relative z-10 mx-auto w-full max-w-6xl flex-1 px-4 sm:px-6 pt-6 pb-10 space-y-6">
+          {studioStyle === 'op1' ? (
+            <Op1HardwareDeck
+              progression={progression}
+              bpm={bpm}
+              isPlaying={player.isPlaying}
+              activeChordIndex={player.activeChordIndex}
+              activeBeat={player.activeBeat}
+              guitarTone={guitarTone}
+              strumPattern={strumPattern}
+              onSelectMode={handleSelectMode}
+              onSelectKey={handleSelectKey}
+              onSelectMood={handleSelectMood}
+              onNextVariant={handleNextVariant}
+              onChangeBpm={setBpm}
+              onChangeGuitarTone={setGuitarTone}
+              onChangeStrumPattern={setStrumPattern}
+            />
+          ) : studioStyle === 'vinyl' ? (
+            <VinylRecordHero
+              progression={progression}
+              bpm={bpm}
+              isPlaying={player.isPlaying}
+              guitarTone={guitarTone}
+              strumPattern={strumPattern}
+              onSelectMode={handleSelectMode}
+              onSelectKey={handleSelectKey}
+              onSelectMood={handleSelectMood}
+              onNextVariant={handleNextVariant}
+              onTogglePlay={() => void player.toggle()}
+              onChangeGuitarTone={setGuitarTone}
+              onChangeStrumPattern={setStrumPattern}
+            />
           ) : (
-            /* Standby State when all lower grid modules are hidden */
-            <div className="border border-dashed border-zinc-800 bg-zinc-950/20 p-12 rounded-sm text-center flex flex-col items-center justify-center space-y-3 shadow-inner my-4">
-              <span className="text-3xs font-mono text-zinc-600 uppercase tracking-widest">[ RACK CONTROL STATE: STANDBY ]</span>
-              <h4 className="text-zinc-500 font-mono text-xs uppercase tracking-wider">All Workstation Modules Bypassed</h4>
-              <p className="text-[10px] text-zinc-600 max-w-xs font-mono">Use the Workspace Desk Manager sub-header toggles at the top of the console to re-enable control blocks.</p>
-            </div>
+            <KeyMoodPicker
+              keyRoot={progression.keyRoot}
+              mode={progression.mode}
+              mood={progression.mood}
+              templateName={progression.templateName}
+              scaleNotes={progression.scaleNotes}
+              guitarTone={guitarTone}
+              strumPattern={strumPattern}
+              onSelectMode={handleSelectMode}
+              onSelectKey={handleSelectKey}
+              onSelectMood={handleSelectMood}
+              onNextVariant={handleNextVariant}
+              onChangeGuitarTone={setGuitarTone}
+              onChangeStrumPattern={setStrumPattern}
+            />
           )}
-        </main>
-          </>
-        )}
 
-        <input
-          ref={sessionFileInputRef}
-          type="file"
-          accept=".acordify.json,application/json"
-          className="hidden"
-          onChange={handleImportSessionFile}
+          <ProgressionStrip
+            progression={progression}
+            activeChordIndex={player.activeChordIndex}
+            activeBeat={player.activeBeat}
+            editingSlotIndex={editingSlotIndex}
+            onToggleEditSlot={handleToggleEditSlot}
+            onReplaceChord={handleReplaceChord}
+            onPreviewChord={(symbol) => void player.previewChord(symbol)}
+            onPluckNote={(noteName) => void player.previewNote(noteName)}
+          />
+
+          <TransportBar
+            isPlaying={player.isPlaying}
+            bpm={bpm}
+            activeBeat={player.activeBeat}
+            countInBeat={player.countInBeat}
+            metronomeEnabled={metronomeEnabled}
+            countInEnabled={countInEnabled}
+            defaultSaveName={defaultSaveName}
+            audioMode={player.audioMode}
+            onTogglePlay={() => void player.toggle()}
+            onChangeBpm={setBpm}
+            onToggleMetronome={() => setMetronomeEnabled((v) => !v)}
+            onToggleCountIn={() => setCountInEnabled((v) => !v)}
+            onShare={() => void handleShare()}
+            onSave={(name) => void handleSave(name)}
+          />
+
+          <AiInspirationPanel
+            chords={chordSymbols}
+            keyRoot={progression.keyRoot}
+            mode={progression.mode}
+            mood={progression.mood}
+            bpm={bpm}
+            isSignedIn={Boolean(authUser)}
+            onOpenAuth={() => setAuthModalOpen(true)}
+            onErrorToast={(msg) => toast.addToast('error', msg)}
+          />
+        </main>
+
+        <footer className="relative z-10 border-t border-[var(--border-subtle)] py-4 px-4 sm:px-6 text-center text-xs text-[var(--text-muted)]">
+          Acordify · Guitarra acústica real, afinador y libreta sincronizada con Neon.
+        </footer>
+
+        <TunerPanel
+          isOpen={tunerOpen}
+          onClose={() => setTunerOpen(false)}
+          onPlayReferenceNote={(noteName) => void player.previewNote(noteName)}
         />
+        <SavedProgressionsDrawer
+          isOpen={savedOpen}
+          items={savedItems}
+          storageMode={isCloudMode ? 'cloud' : 'local'}
+          onClose={() => setSavedOpen(false)}
+          onLoad={handleLoadSaved}
+          onDelete={(id) => void handleDeleteSaved(id)}
+        />
+        <AuthModal
+          isOpen={authModalOpen}
+          onClose={() => setAuthModalOpen(false)}
+          onAuthSuccess={() => toast.addToast('success', 'Sesión iniciada')}
+        />
+        <ToastContainer toasts={toast.toasts} onDismiss={toast.removeToast} />
       </div>
-    );
+    </StudioStyleProvider>
+  );
 }
 
 export default App;
