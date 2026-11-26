@@ -1,6 +1,6 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { AnimatePresence, motion, useMotionValue, useReducedMotion, useScroll, useSpring, useTransform } from 'motion/react';
-import { ArrowDown, ArrowUpRight, ChevronDown, Play, SlidersHorizontal, Square, User, Volume2 } from 'lucide-react';
+import React, { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { AnimatePresence, motion, useReducedMotion, useScroll, useTransform } from 'motion/react';
+import { ArrowDown, ArrowUpRight, ChevronDown, Play, SlidersHorizontal, Square, User } from 'lucide-react';
 import { getGuitarChord, type GuitarChordVoicing } from '../data/chords';
 import type { AuthUserSummary } from '../lib/neonAuth';
 import {
@@ -11,14 +11,17 @@ import {
   type Mode,
 } from '../theory';
 import { AcordifyLogo, AcordifyWordmark } from './AcordifyLogo';
-import { LandingStrum } from './LandingStrum';
 import { Fretboard } from './Fretboard';
+import guitarCover from '../assets/acordify-guitar-cover.webp';
+import playingGuitar from '../assets/acordify-practice.webp';
 import './LandingPage.css';
+
+const GuitarScene = lazy(() => import('./GuitarScene'));
 
 interface LandingPageProps {
   onEnterStudio: (
     initialSection?: 'progressions' | 'circle' | 'scales',
-    preset?: { keyRoot: string; mode: Mode },
+    preset?: PracticePreset,
   ) => void;
   onOpenAuth: () => void;
   onOpenTuner: () => void;
@@ -28,49 +31,34 @@ interface LandingPageProps {
   onPluckNote: (scientificNote: string) => void;
 }
 
-interface HeroDemoPreset {
-  id: string;
-  label: string;
+export interface PracticePreset {
   keyRoot: string;
   mode: Mode;
-  chords: readonly [string, string, string, string];
-  numerals: readonly [string, string, string, string];
+  degrees?: readonly number[];
+  bpm?: number;
 }
 
-const HERO_PRESETS: readonly HeroDemoPreset[] = [
-  {
-    id: 'g-major',
-    label: 'G · Sol Mayor',
-    keyRoot: 'G',
-    mode: 'major',
-    chords: ['G', 'Em', 'C', 'D'],
-    numerals: ['I', 'vi', 'IV', 'V'],
-  },
-  {
-    id: 'c-major',
-    label: 'C · Do Mayor',
-    keyRoot: 'C',
-    mode: 'major',
-    chords: ['C', 'Am', 'F', 'G'],
-    numerals: ['I', 'vi', 'IV', 'V'],
-  },
-  {
-    id: 'a-minor',
-    label: 'Am · La Menor',
-    keyRoot: 'A',
-    mode: 'minor',
-    chords: ['Am', 'F', 'C', 'G'],
-    numerals: ['i', 'VI', 'III', 'VII'],
-  },
-  {
-    id: 'e-minor',
-    label: 'Em · Mi Menor',
-    keyRoot: 'E',
-    mode: 'minor',
-    chords: ['Em', 'C', 'G', 'D'],
-    numerals: ['i', 'VI', 'III', 'VII'],
-  },
+const DEMO_BPM = 112;
+const CHORD_DURATION_MS = 240_000 / DEMO_BPM;
+
+const DEMO_SPECS = [
+  { id: 'g-major', label: 'Sol mayor', keyRoot: 'G', mode: 'major', degrees: [1, 6, 4, 5] },
+  { id: 'c-major', label: 'Do mayor', keyRoot: 'C', mode: 'major', degrees: [1, 6, 4, 5] },
+  { id: 'a-minor', label: 'La menor', keyRoot: 'A', mode: 'minor', degrees: [1, 6, 3, 7] },
+  { id: 'e-minor', label: 'Mi menor', keyRoot: 'E', mode: 'minor', degrees: [1, 6, 3, 7] },
 ] as const;
+
+const HERO_PRESETS = DEMO_SPECS.map((preset) => {
+  const keyChords = getDiatonicChords(preset.keyRoot, preset.mode);
+  const chords = preset.degrees.map((degree) => keyChords[degree - 1]);
+  return {
+    ...preset,
+    bpm: DEMO_BPM,
+    chords: chords.map((chord) => chord.symbol),
+  };
+});
+
+type HeroDemoPreset = (typeof HERO_PRESETS)[number];
 
 const NAV_ITEMS = [
   { id: 'herramientas', label: 'Herramientas' },
@@ -130,14 +118,34 @@ export const LandingPage: React.FC<LandingPageProps> = ({
   const [openFaqIdx, setOpenFaqIdx] = useState<number | null>(0);
 
   const loopTimerRef = useRef<number | null>(null);
+
   const heroRef = useRef<HTMLElement>(null);
-  const reducedMotion = useReducedMotion();
-  const { scrollYProgress } = useScroll({ target: heroRef, offset: ['start start', 'end start'] });
-  const photoY = useTransform(scrollYProgress, [0, 1], [0, 145]);
-  const tiltX = useMotionValue(0);
-  const tiltY = useMotionValue(0);
-  const rotateX = useSpring(tiltX, { stiffness: 150, damping: 24 });
-  const rotateY = useSpring(tiltY, { stiffness: 150, damping: 24 });
+  const practiceRef = useRef<HTMLElement>(null);
+  const prefersReducedMotion = useReducedMotion() === true;
+  const { scrollYProgress: pageProgress } = useScroll();
+  const { scrollYProgress: coverProgress } = useScroll({
+    target: heroRef,
+    offset: ['start start', 'end start'],
+  });
+  const { scrollYProgress: practiceProgress } = useScroll({
+    target: practiceRef,
+    offset: ['start end', 'center center'],
+  });
+  const coverY = useTransform(coverProgress, [0, 0.8], [0, 118]);
+  const coverScale = useTransform(coverProgress, [0, 0.8], [1, 1.12]);
+  const coverShade = useTransform(coverProgress, [0, 0.8], [0, 0.52]);
+  const practiceScale = useTransform(practiceProgress, [0, 0.82], [1.36, 1]);
+  const practiceY = useTransform(practiceProgress, [0, 0.82], [36, 0]);
+  const practiceCut = useTransform(practiceProgress, [0, 0.82], ['inset(0 0 0 48%)', 'inset(0 0 0 0%)']);
+  const practiceFade = useTransform(practiceProgress, [0, 0.82], [0.32, 1]);
+  const practiceAccent = useTransform(practiceProgress, [0, 0.82], [0.06, 1]);
+
+  const toolEntrance = prefersReducedMotion ? {} : {
+    initial: { opacity: 0.84, y: 14 },
+    whileInView: { opacity: 1, y: 0 },
+    viewport: { once: true, amount: 0.2 },
+    transition: { duration: 0.5, ease: [0.22, 1, 0.36, 1] as const },
+  };
 
   const activePreset =
     HERO_PRESETS.find((p) => p.id === selectedPresetId) ?? HERO_PRESETS[0];
@@ -146,11 +154,6 @@ export const LandingPage: React.FC<LandingPageProps> = ({
   const activeVoicing = useMemo(
     () => getGuitarChord(activeChordSymbol),
     [activeChordSymbol],
-  );
-
-  const heroNeighbors = useMemo(
-    () => getHarmonicNeighbors(activePreset.keyRoot, activePreset.mode),
-    [activePreset.keyRoot, activePreset.mode],
   );
 
   const circlePreviewPos = CIRCLE_POSITIONS[previewCircleIdx] ?? CIRCLE_POSITIONS[1];
@@ -183,22 +186,27 @@ export const LandingPage: React.FC<LandingPageProps> = ({
     };
   }, []);
 
-  useEffect(() => {
-    return () => {
-      if (loopTimerRef.current !== null) {
-        window.clearInterval(loopTimerRef.current);
-        loopTimerRef.current = null;
-      }
-    };
+  const clearLoopTimer = useCallback(() => {
+    if (loopTimerRef.current === null) return;
+    window.clearInterval(loopTimerRef.current);
+    loopTimerRef.current = null;
   }, []);
 
-  const stopLoop = () => {
-    if (loopTimerRef.current !== null) {
-      window.clearInterval(loopTimerRef.current);
-      loopTimerRef.current = null;
-    }
+  const stopLoop = useCallback(() => {
+    clearLoopTimer();
     setIsLoopPlaying(false);
-  };
+  }, [clearLoopTimer]);
+
+  useEffect(() => {
+    const pauseWhenHidden = () => {
+      if (document.hidden) stopLoop();
+    };
+    document.addEventListener('visibilitychange', pauseWhenHidden);
+    return () => {
+      document.removeEventListener('visibilitychange', pauseWhenHidden);
+      clearLoopTimer();
+    };
+  }, [clearLoopTimer, stopLoop]);
 
   const toggleLoop = () => {
     if (isLoopPlaying) {
@@ -212,11 +220,11 @@ export const LandingPage: React.FC<LandingPageProps> = ({
     onPreviewChord(activePreset.chords[0]);
 
     loopTimerRef.current = window.setInterval(() => {
-      idx = (idx + 1) % 4;
+      idx = (idx + 1) % activePreset.chords.length;
       setActiveChordIdx(idx);
       setPluckTick((t) => t + 1);
       onPreviewChord(activePreset.chords[idx]);
-    }, 1350);
+    }, CHORD_DURATION_MS);
   };
 
   const handleSelectPreset = (preset: HeroDemoPreset) => {
@@ -236,15 +244,16 @@ export const LandingPage: React.FC<LandingPageProps> = ({
 
   const handleEnter = (
     section: 'progressions' | 'circle' | 'scales' = 'progressions',
-    preset?: { keyRoot: string; mode: Mode },
+    preset?: PracticePreset,
   ) => {
     stopLoop();
     onEnterStudio(section, preset);
   };
 
   return (
-    <div className="acordify-landing min-h-screen flex flex-col bg-[var(--color-bg)] text-[var(--color-ink)]" id="portada">
+    <div className="acordify-landing min-h-screen flex flex-col bg-[var(--color-bg)] text-[var(--color-ink)]" id="portada" data-motion={prefersReducedMotion ? 'reduced' : 'full'}>
       {/* Top Sticky Bar — Clean Hairline + Smooth Guide Active Underline */}
+      <a className="skip-to-content" href="#landing-main">Saltar al contenido</a>
       <header className="landing-header sticky top-0 z-40 backdrop-blur-md">
         <div className="mx-auto max-w-[1160px] h-16 px-4 sm:px-8 flex items-center justify-between gap-2 sm:gap-4">
           <a
@@ -317,199 +326,175 @@ export const LandingPage: React.FC<LandingPageProps> = ({
 
             <button
               type="button"
-              onClick={() =>
-                handleEnter('progressions', {
-                  keyRoot: activePreset.keyRoot,
-                  mode: activePreset.mode,
-                })
-              }
+              onClick={() => handleEnter()}
               className="landing-cta landing-cta-small"
             >
               Abrir estudio
             </button>
           </div>
         </div>
+        <motion.div className="landing-reading-progress" style={{ scaleX: pageProgress }} aria-hidden="true" />
       </header>
 
-      <main className="flex-1">
+      <main id="landing-main" tabIndex={-1} className="flex-1">
 
         <section ref={heroRef} className="landing-hero" aria-labelledby="landing-title">
-          <motion.div className="landing-hero-art" style={{ y: reducedMotion ? 0 : photoY }} aria-hidden="true" />
           <div className="landing-hero-layout">
-            <motion.div
-              className="landing-intro"
-              initial={reducedMotion ? false : { opacity: 0, y: 18 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.65, ease: [0.22, 1, 0.36, 1] }}
-            >
-              <h1 id="landing-title">
-                Dale forma
-                <em>a tu sonido.</em>
-              </h1>
-              <p>Prueba qué acordes van juntos, encuentra las notas en el diapasón y escucha tus ideas antes de llevarlas a la guitarra.</p>
-              <div className="landing-actions">
-                <button type="button" className="landing-cta" onClick={() => handleEnter('progressions', activePreset)}>
-                  Abrir el estudio <ArrowUpRight size={18} aria-hidden="true" />
-                </button>
-                <button type="button" className="landing-text-button" onClick={() => {
-                  stopLoop();
-                  onOpenTuner();
-                }}>
-                  <SlidersHorizontal size={16} aria-hidden="true" /> Afinador
-                </button>
-              </div>
-            </motion.div>
-
-            <motion.div
-              className="landing-deck-scene"
-              initial={reducedMotion ? false : { opacity: 0, y: 24 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.75, delay: 0.1, ease: [0.22, 1, 0.36, 1] }}
-              onPointerMove={(event) => {
-                if (reducedMotion || event.pointerType !== 'mouse') return;
-                const rect = event.currentTarget.getBoundingClientRect();
-                tiltX.set((0.5 - (event.clientY - rect.top) / rect.height) * 7);
-                tiltY.set(((event.clientX - rect.left) / rect.width - 0.5) * 9);
-              }}
-              onPointerLeave={() => {
-                tiltX.set(0);
-                tiltY.set(0);
-              }}
-            >
-              <motion.div className="landing-deck" style={{ rotateX: reducedMotion ? 0 : rotateX, rotateY: reducedMotion ? 0 : rotateY }}>
-                <div className="landing-deck-header">
-                  <div>
-                    <h2>Prueba cuatro acordes</h2>
-                    <p>Toca un acorde o escucha la vuelta.</p>
-                  </div>
-                  <div className="landing-meter" aria-hidden="true">
-                    {[14, 23, 13, 32, 20, 29, 13, 21, 10].map((height, index) => (
-                      <span
-                        key={`${pluckTick}-${index}`}
-                        className={pluckTick ? 'is-sounding' : undefined}
-                        style={{ height, animationDelay: `${index * 16}ms` }}
-                      />
-                    ))}
-                  </div>
+            <div className="landing-cover">
+              <div className="landing-intro">
+                <h1 id="landing-title">Practica <span>guitarra.</span></h1>
+                <p className="landing-dek">Escucha progresiones, aprende dónde van los dedos y toca a tu ritmo. Todo desde tu navegador.</p>
+                <div className="landing-actions">
+                  <a href="#rasguear" className="landing-cta">
+                    Probar con cuatro acordes <ArrowDown size={17} aria-hidden="true" />
+                  </a>
                 </div>
+              </div>
+              <motion.div
+                className="landing-cover-media"
+                style={prefersReducedMotion ? undefined : { y: coverY, scale: coverScale }}
+              >
+                <img
+                  className="landing-cover-photo"
+                  src={guitarCover}
+                  width="1440"
+                  height="960"
+                  alt="Guitarra eléctrica de seis cuerdas con cuerpo oscuro y mástil de madera"
+                  fetchPriority="high"
+                  decoding="async"
+                />
+                <Suspense fallback={null}>
+                  <GuitarScene
+                    scroll={coverProgress}
+                    frets={activeVoicing.frets}
+                    strike={pluckTick}
+                    animate={!prefersReducedMotion}
+                  />
+                </Suspense>
+              </motion.div>
+              <motion.span className="landing-cover-shade" style={{ opacity: coverShade }} aria-hidden="true" />
+            </div>
+          </div>
+        </section>
 
-                <div className="landing-deck-controls">
-                  <label className="landing-preset">
-                    <span className="sr-only">Tonalidad de prueba</span>
+        <section ref={practiceRef} className="landing-practice" id="rasguear" aria-labelledby="strum-title">
+          <div className="landing-practice-heading">
+            <div className="landing-practice-title">
+              <h2 id="strum-title">Cuatro acordes para empezar.</h2>
+              <p>Escucha la vuelta. Elige un acorde y sigue el diagrama para tocarlo en tu guitarra.</p>
+            </div>
+            <div className="landing-practice-photo" aria-hidden="true">
+              <motion.img
+                src={playingGuitar}
+                width="1200"
+                height="800"
+                loading="lazy"
+                decoding="async"
+                alt=""
+                style={prefersReducedMotion
+                  ? { opacity: practiceFade }
+                  : { scale: practiceScale, y: practiceY, clipPath: practiceCut }}
+              />
+            </div>
+            <motion.span className="landing-practice-rule" style={{ scaleX: practiceAccent }} aria-hidden="true" />
+          </div>
+          <div className="landing-practice-stage" style={{ '--chord-duration': `${CHORD_DURATION_MS}ms` } as React.CSSProperties}>
+            <div className="landing-track">
+              <div className="landing-track-options">
+                <label className="landing-preset">
+                  <span>Tonalidad</span>
+                  <span className="landing-preset-field">
                     <select value={activePreset.id} onChange={(event) => {
                       const preset = HERO_PRESETS.find((item) => item.id === event.target.value);
                       if (preset) handleSelectPreset(preset);
                     }}>
                       {HERO_PRESETS.map((preset) => <option key={preset.id} value={preset.id}>{preset.label}</option>)}
                     </select>
-                    <ChevronDown size={14} aria-hidden="true" />
-                  </label>
-                  <button type="button" onClick={toggleLoop} className="landing-loop" aria-pressed={isLoopPlaying}>
-                    {isLoopPlaying ? <Square size={13} fill="currentColor" aria-hidden="true" /> : <Play size={13} fill="currentColor" aria-hidden="true" />}
-                    {isLoopPlaying ? 'Detener vuelta' : 'Escuchar vuelta'}
+                    <ChevronDown size={15} aria-hidden="true" />
+                  </span>
+                </label>
+                <button type="button" className="landing-cta landing-track-play" onClick={toggleLoop} aria-pressed={isLoopPlaying}>
+                  {isLoopPlaying ? <Square size={15} fill="currentColor" aria-hidden="true" /> : <Play size={15} fill="currentColor" aria-hidden="true" />}
+                  {isLoopPlaying ? 'Detener vuelta' : 'Escuchar la vuelta'}
+                </button>
+              </div>
+              <div className="landing-pads" role="group" aria-label="Acordes de la vuelta">
+                {activePreset.chords.map((chord, index) => (
+                  <button
+                    key={chord}
+                    type="button"
+                    aria-pressed={index === activeChordIdx}
+                    aria-label={`Tocar ${chord}`}
+                    onClick={() => handleSelectHeroChord(index, chord)}
+                  >
+                    <strong>{chord}</strong>
+                    {isLoopPlaying && index === activeChordIdx && <i aria-hidden="true" />}
                   </button>
-                </div>
+                ))}
+              </div>
+            </div>
 
-                <div className="landing-deck-body">
-                  <div className="landing-pads" role="group" aria-label="Acordes de la vuelta">
-                    {activePreset.chords.map((chord, idx) => (
-                      <button
-                        key={idx}
-                        type="button"
-                        aria-pressed={idx === activeChordIdx}
-                        aria-label={`Tocar ${chord}`}
-                        onClick={() => handleSelectHeroChord(idx, chord)}
-                      >
-                        <span>{activePreset.numerals[idx]} <Volume2 size={13} aria-hidden="true" /></span>
-                        <strong>{chord}</strong>
-                      </button>
-                    ))}
-                  </div>
-                  <div className="landing-diagram">
-                    <div className="landing-diagram-label">
-                      <strong>{activeChordSymbol}</strong>
-                      <span>Digitación</span>
-                    </div>
-                    <Fretboard
-                      frets={activeVoicing.frets}
-                      fingers={activeVoicing.fingers}
-                      rootStrings={activeVoicing.rootStrings}
-                      startFret={activeVoicing.startFret}
-                      barre={activeVoicing.barre}
-                      isActive={isLoopPlaying}
-                      pluckTick={pluckTick}
-                      onPluckString={(strIdx) => {
-                        const note = getNoteNameForStringIndex(activeVoicing, strIdx);
-                        if (note) {
-                          setPluckTick((tick) => tick + 1);
-                          onPluckNote(note);
-                        }
-                      }}
-                    />
-                  </div>
-                </div>
-                <div className="landing-deck-footer">
-                  <span>Vecina en quintas · <strong>{heroNeighbors.dominant.root} {activePreset.mode === 'minor' ? 'menor' : 'mayor'}</strong></span>
-                  <button type="button" onClick={() => handleEnter('circle', activePreset)}>Explorar <ArrowUpRight size={14} aria-hidden="true" /></button>
-                </div>
-              </motion.div>
-            </motion.div>
-          </div>
-          <div className="landing-hero-footer">
-            <a href="#rasguear">Rasguear cuerdas <ArrowDown size={16} aria-hidden="true" /></a>
-            <span>Practica gratis, sin cuenta</span>
+            <section className="landing-practice-content" aria-labelledby="practice-chord">
+              <div className="landing-practice-current">
+                <h3 id="practice-chord">Cómo tocar <strong>{activeChordSymbol}</strong></h3>
+                <p>Pulsa una cuerda del diapasón para escuchar la nota.</p>
+                <ul className="landing-chord-legend">
+                  <li><b>1–4</b> Dedos de índice a meñique</li>
+                  <li><b>○</b> Cuerda al aire</li>
+                  <li><b>×</b> Cuerda que no se toca</li>
+                </ul>
+              </div>
+              <div className="landing-practice-diagram">
+                <Fretboard
+                  frets={activeVoicing.frets}
+                  fingers={activeVoicing.fingers}
+                  rootStrings={activeVoicing.rootStrings}
+                  startFret={activeVoicing.startFret}
+                  barre={activeVoicing.barre}
+                  isActive={isLoopPlaying}
+                  pluckTick={pluckTick}
+                  onPluckString={(index) => {
+                    const note = getNoteNameForStringIndex(activeVoicing, index);
+                    if (note) {
+                      stopLoop();
+                      onPluckNote(note);
+                    }
+                  }}
+                />
+              </div>
+              <button type="button" className="landing-text-button landing-practice-enter" onClick={() => handleEnter('progressions', activePreset)}>
+                Practicar estos acordes en el estudio <ArrowUpRight size={17} aria-hidden="true" />
+              </button>
+            </section>
           </div>
         </section>
 
         {/* Tools — Three Interactive Previews Built From the Same Theory Engine */}
         <section
           id="herramientas"
-          className="landing-tools mx-auto max-w-[1160px] px-4 sm:px-8 pb-20 sm:pb-24 space-y-8"
+          className="landing-tools"
         >
           <div className="landing-section-heading">
             <h2 className="text-3xl sm:text-4xl font-medium tracking-[-0.025em] text-[var(--color-ink)]">
-              De la primera nota <em>a la siguiente idea.</em>
+              Llévalo a la guitarra.
             </h2>
             <p className="text-sm text-[var(--color-ink-secondary)] max-w-md">
-              Arma una progresión, explora tonalidades cercanas o practica una escala en el diapasón.
+              Cambia un acorde, encuentra una tonalidad vecina o prueba una escala sobre lo que estás tocando.
             </p>
           </div>
 
-          <section className="landing-strum" id="rasguear" aria-labelledby="strum-title">
-            <div className="landing-strum-intro">
-              <h3 id="strum-title">Rasguea el acorde.</h3>
-              <p>Arrastra el dedo o el cursor entre las cuerdas. También puedes tocarlas una por una.</p>
-              <label>
-                Acorde
-                <select value={activeChordIdx} onChange={(event) => {
-                  const index = Number(event.target.value);
-                  handleSelectHeroChord(index, activePreset.chords[index]);
-                }}>
-                  {activePreset.chords.map((chord, index) => <option key={chord} value={index}>{chord}</option>)}
-                </select>
-              </label>
-            </div>
-            <LandingStrum
-              notes={activeVoicing.frets.map((_, index) => getNoteNameForStringIndex(activeVoicing, index))}
-              onPlay={(note) => {
-                stopLoop();
-                onPluckNote(note);
-              }}
-            />
-          </section>
-
-          <div className="landing-tools-grid grid grid-cols-1 lg:grid-cols-3 gap-5">
+          <div className="landing-tools-grid">
             {/* 1. Progresiones Specimen */}
-            <div className="landing-tool-card surface-card p-5 sm:p-6 flex flex-col justify-between gap-6">
+            <motion.article className="landing-tool-card landing-tool-progressions" {...toolEntrance}>
               <div className="space-y-4">
                 <div className="flex items-baseline justify-between gap-2 border-b border-[var(--color-border)] pb-3">
-                  <h3 className="text-xl font-medium text-[var(--color-ink)]">Progresiones</h3>
+                  <h3>Progresiones</h3>
                   <span className="font-mono text-xs text-[var(--color-ink-muted)]">
-                    Crea y edita
+                    Sol mayor
                   </span>
                 </div>
 
-                <div className="grid grid-cols-4 gap-1.5">
+                <div className="landing-tool-chords">
                   {(['G', 'Em', 'C', 'D'] as const).map((sym, idx) => (
                     <button
                       key={sym}
@@ -518,14 +503,12 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                         stopLoop();
                         onPreviewChord(sym);
                       }}
-                      className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-board)] py-2.5 text-center hover:border-[var(--color-ink)] cursor-pointer transition-colors duration-150"
+                      aria-label={`Escuchar ${sym}`}
                     >
-                      <span className="block font-mono text-[10px] text-[var(--color-ink-muted)]">
+                      <span>
                         {(['I', 'vi', 'IV', 'V'] as const)[idx]}
                       </span>
-                      <span className="block font-mono text-sm font-medium text-[var(--color-ink)] mt-0.5">
-                        {sym}
-                      </span>
+                      <strong>{sym}</strong>
                     </button>
                   ))}
                 </div>
@@ -542,13 +525,13 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               >
                 Abrir Progresiones
               </button>
-            </div>
+            </motion.article>
 
             {/* 2. Interactive Circle Specimen */}
-            <div className="landing-tool-card surface-card p-5 sm:p-6 flex flex-col justify-between gap-6">
+            <motion.article className="landing-tool-card landing-tool-circle" {...toolEntrance}>
               <div className="space-y-4">
                 <div className="flex items-baseline justify-between gap-2 border-b border-[var(--color-border)] pb-3">
-                  <h3 className="text-xl font-medium text-[var(--color-ink)]">
+                  <h3>
                     Círculo de Quintas
                   </h3>
                   <span className="font-mono text-xs text-[var(--color-ink-muted)]">
@@ -556,8 +539,8 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                   </span>
                 </div>
 
-                <div className="rounded-[12px] border border-[var(--color-border)] bg-[var(--color-surface-board)] p-3 flex items-center gap-4">
-                  <svg viewBox="0 0 100 100" className="w-[118px] h-auto shrink-0 select-none">
+                <div className="landing-tool-circle-preview">
+                  <svg viewBox="0 0 100 100" className="landing-circle-figure select-none">
                     <circle cx="50" cy="50" r="44" fill="#FFFFFF" stroke="#E4E4E7" strokeWidth="1" />
                     <circle cx="50" cy="50" r="24" fill="#FAFAFA" stroke="#E4E4E7" strokeWidth="1" />
                     {CIRCLE_POSITIONS.map((pos) => {
@@ -594,7 +577,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                             cx={x}
                             cy={y}
                             r={8.4}
-                            fill={isActive ? '#231b16' : isNeighbor ? '#a64229' : '#efe9df'}
+                            fill={isActive ? '#172437' : isNeighbor ? '#3d581d' : '#dfe6ef'}
                           />
                           <text
                             x={x}
@@ -625,7 +608,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                 </div>
 
                 <p className="text-sm text-[var(--color-ink-secondary)] leading-relaxed">
-                  Toca una tonalidad del círculo para oírla. En el estudio puedes ver qué acordes comparte con sus vecinas.
+                  Encuentra los acordes de una tonalidad y escucha una vuelta que empieza y termina en el mismo acorde.
                 </p>
               </div>
 
@@ -636,19 +619,19 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               >
                 Explorar el Círculo
               </button>
-            </div>
+            </motion.article>
 
             {/* 3. Real Box 1 Pentatonic Specimen */}
-            <div className="landing-tool-card surface-card p-5 sm:p-6 flex flex-col justify-between gap-6">
+            <motion.article className="landing-tool-card landing-tool-scales" {...toolEntrance}>
               <div className="space-y-4">
                 <div className="flex items-baseline justify-between gap-2 border-b border-[var(--color-border)] pb-3">
-                  <h3 className="text-xl font-medium text-[var(--color-ink)]">Escalas</h3>
+                  <h3>Escalas</h3>
                   <span className="font-mono text-xs text-[var(--color-ink-muted)]">
                     Am · Caja 1 · Tr. {scalePreviewBox.startFret}–{scalePreviewBox.endFret}
                   </span>
                 </div>
 
-                <div className="rounded-[12px] border border-[var(--color-border)] bg-[var(--color-surface-board)] p-3">
+                <div className="landing-tool-scale-preview">
                   <svg viewBox="0 0 220 98" className="w-full h-auto select-none">
                     {[0, 1, 2, 3, 4].map((col) => (
                       <line
@@ -713,7 +696,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                             cx={cx}
                             cy={cy}
                             r={isPicked ? 6.5 : 5.5}
-                            fill={n.isRoot || isPicked ? '#E85D3D' : '#111111'}
+                            fill={n.isRoot || isPicked ? 'var(--color-accent)' : '#111111'}
                           />
                           <text
                             x={cx}
@@ -742,7 +725,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               >
                 Practicar Escalas
               </button>
-            </div>
+            </motion.article>
           </div>
 
           {/* Chromatic Tuner Row (direct access) */}

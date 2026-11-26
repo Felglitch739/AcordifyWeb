@@ -4,8 +4,6 @@ import {
   BookmarkPlus,
   Check,
   Link2,
-  Play,
-  Square,
   Timer,
   Volume2,
   X,
@@ -19,7 +17,6 @@ interface TransportBarProps {
   metronomeEnabled: boolean;
   countInEnabled: boolean;
   defaultSaveName: string;
-  onTogglePlay: () => void;
   onChangeBpm: (bpm: number) => void;
   onToggleMetronome: () => void;
   onToggleCountIn: () => void;
@@ -35,7 +32,6 @@ export const TransportBar: React.FC<TransportBarProps> = ({
   metronomeEnabled,
   countInEnabled,
   defaultSaveName,
-  onTogglePlay,
   onChangeBpm,
   onToggleMetronome,
   onToggleCountIn,
@@ -81,7 +77,7 @@ export const TransportBar: React.FC<TransportBarProps> = ({
   };
 
   return (
-    <div className="md:sticky md:top-[72px] z-20 w-full">
+    <div className="w-full">
       <div
         data-transport-bar="true"
         className="surface-card border-[var(--color-border)] bg-[var(--color-surface)] p-3 sm:px-4 sm:py-3 shadow-[0_14px_30px_-18px_rgba(61,39,27,0.28)]"
@@ -110,7 +106,7 @@ export const TransportBar: React.FC<TransportBarProps> = ({
               onChange={(e) => setSaveName(e.target.value)}
               placeholder="Ej. Vuelta tranquila en Sol"
               autoFocus
-              className="flex-1 min-w-0 rounded-full border border-[var(--color-border)] bg-[var(--color-surface-board)] px-3.5 py-1.5 text-sm text-[var(--color-ink)] focus:border-[var(--color-ink)] focus:outline-none"
+              className="flex-1 min-w-0 rounded-full border border-[var(--color-border)] bg-[var(--color-surface-board)] px-3.5 py-1.5 text-sm text-[var(--color-ink)] focus:border-[var(--color-ink)]"
             />
             <div className="flex items-center gap-2 shrink-0">
               <button type="submit" className="btn-primary px-4 py-1.5 text-xs">
@@ -134,29 +130,6 @@ export const TransportBar: React.FC<TransportBarProps> = ({
         <div className="flex flex-wrap items-center justify-between gap-2.5 sm:gap-3">
           {/* Group A: Playback + Beat Dots + Tempo */}
           <div className="flex flex-wrap items-center gap-2 min-w-0">
-            <button
-              type="button"
-              onClick={onTogglePlay}
-              aria-pressed={isPlaying}
-              className={`min-h-11 rounded-full px-4 py-2 text-xs font-medium inline-flex items-center gap-2 transition-colors duration-150 cursor-pointer whitespace-nowrap ${
-                isPlaying
-                  ? 'bg-[var(--color-accent)] text-white hover:opacity-90'
-                  : 'bg-[#ffc1a7] text-[#382017] hover:bg-[#ffb18f]'
-              }`}
-            >
-              {isPlaying ? (
-                <>
-                  <Square className="w-3.5 h-3.5 fill-current" />
-                  <span>Detener</span>
-                </>
-              ) : (
-                <>
-                  <Play className="w-3.5 h-3.5 fill-current" />
-                  <span>Escuchar loop</span>
-                </>
-              )}
-            </button>
-
             {/* 4-Beat Indicator */}
             <div
               className="flex items-center gap-1.5 rounded-full border border-[var(--color-border)] bg-[var(--color-surface-board)] px-3 py-2.5"
@@ -232,7 +205,7 @@ export const TransportBar: React.FC<TransportBarProps> = ({
                       onChangeBpm(Math.max(50, Math.min(160, Math.round(parsed))));
                     }
                   }}
-                  className="w-11 bg-transparent text-center font-mono text-xs font-medium text-[var(--color-ink)] num-tabular focus:outline-none"
+                  className="w-11 bg-transparent text-center font-mono text-xs font-medium text-[var(--color-ink)] num-tabular"
                 />
                 <span className="font-mono text-[11px] text-[var(--color-ink-muted)]">BPM</span>
               </div>

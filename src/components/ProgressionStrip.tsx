@@ -44,6 +44,7 @@ export const ProgressionStrip: React.FC<ProgressionStripProps> = ({
   onPreviewChord,
   onPluckNote,
 }) => {
+  const [selectedSlotIndex, setSelectedSlotIndex] = useState(0);
   const [manualPluckTicks, setManualPluckTicks] = useState<[number, number, number, number]>([
     0, 0, 0, 0,
   ]);
@@ -57,6 +58,7 @@ export const ProgressionStrip: React.FC<ProgressionStripProps> = ({
   };
 
   const handleChordPreview = (slotIndex: number, symbol: string) => {
+    setSelectedSlotIndex(slotIndex);
     bumpPluckTick(slotIndex);
     onPreviewChord(symbol);
   };
@@ -86,157 +88,66 @@ export const ProgressionStrip: React.FC<ProgressionStripProps> = ({
         )
       : [];
 
+  const currentIndex = activeChordIndex >= 0 ? activeChordIndex : selectedSlotIndex;
+  const slot = progression.slots[currentIndex];
+  const voicing = getGuitarChord(slot.chord.symbol);
+  const isPlayingChord = activeChordIndex === currentIndex;
+  const isEditing = editingSlotIndex === currentIndex;
+
   return (
     <section aria-label="Progresión de 4 acordes y diagramas" className="space-y-4">
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {progression.slots.map((slot) => {
-          const voicing = getGuitarChord(slot.chord.symbol);
-          const isActive = activeChordIndex === slot.slotIndex;
-          const isEditing = editingSlotIndex === slot.slotIndex;
 
-          return (
-            <motion.article
-              key={`slot-${slot.slotIndex}`}
-              initial={false}
-              animate={{ y: isActive ? -3 : 0 }}
-              transition={{ type: 'spring', stiffness: 380, damping: 30 }}
-              className={`surface-card relative overflow-hidden p-4 flex flex-col justify-between transition-colors duration-150 ${
-                isActive
-                  ? 'border-[var(--color-accent)] bg-[var(--color-surface)] shadow-[0_14px_30px_-16px_rgba(232,93,61,0.32)]'
-                  : isEditing
-                    ? 'border-[var(--color-ink)] shadow-[0_12px_28px_-18px_rgba(17,17,17,0.18)]'
-                    : 'hover:border-[var(--color-ink-muted)] hover:shadow-[0_12px_28px_-18px_rgba(17,17,17,0.18)]'
-              }`}
+      <div className="studio-progression">
+        <div className="studio-score">
+          <div className="studio-score-track" role="group" aria-label="Acordes de la progresión">
+            {progression.slots.map((item) => (
+              <button
+                key={item.slotIndex}
+                type="button"
+                aria-label={`Escuchar ${item.chord.symbol}, acorde ${item.slotIndex + 1}`}
+                aria-pressed={currentIndex === item.slotIndex}
+                onClick={() => handleChordPreview(item.slotIndex, item.chord.symbol)}
+              >
+                <span>{item.chord.roman}</span>
+                <strong>{item.chord.symbol}</strong>
+                <Volume2 size={16} aria-hidden="true" />
+              </button>
+            ))}
+          </div>
+          <div className="studio-chord-detail">
+            <div>
+              <h2>{slot.chord.symbol}</h2>
+              <p>{slot.roleHint}</p>
+            </div>
+            <button
+              type="button"
+              className="btn-secondary"
+              aria-expanded={isEditing}
+              onClick={() => onToggleEditSlot(currentIndex)}
             >
-              {isActive && (
-                <span
-                  aria-hidden="true"
-                  className="pointer-events-none absolute inset-x-0 top-0 h-[2px] bg-[var(--color-accent)]"
-                />
-              )}
-              <div>
-                {/* Top Metadata Strip (Monochrome hairline) */}
-                <div
-                  className={`flex items-center justify-between gap-2 pb-3 border-b ${
-                    isActive
-                      ? 'border-[var(--color-accent-border)]'
-                      : 'border-[var(--color-border)]'
-                  }`}
-                >
-                  <div className="flex items-center gap-2 font-mono text-xs">
-                    <span
-                      className={
-                        isActive
-                          ? 'text-[var(--color-accent)] font-medium'
-                          : 'text-[var(--color-ink-muted)]'
-                      }
-                    >
-                      0{slot.slotIndex + 1}
-                    </span>
-                    <span className="font-medium text-[var(--color-ink)]">
-                      {slot.chord.roman}
-                    </span>
-                  </div>
-                  <span className="rounded-full border border-[var(--color-border)] px-2.5 py-0.5 font-mono text-[11px] uppercase tracking-wider text-[var(--color-ink-muted)]">
-                    {slot.chord.functionLabel}
-                  </span>
-                </div>
-
-                {/* Chord Name & Voicing Tag */}
-                <div className="mt-3.5 flex items-start justify-between gap-2">
-                  <button
-                    type="button"
-                    onClick={() => handleChordPreview(slot.slotIndex, slot.chord.symbol)}
-                    className="group text-left cursor-pointer"
-                    title={`Escuchar ${slot.chord.symbol}`}
-                  >
-                    <h2 className="text-3xl font-medium tracking-[-0.02em] text-[var(--color-ink)] group-hover:text-[var(--color-accent)] transition-colors duration-150">
-                      {slot.chord.symbol}
-                    </h2>
-                    <span className="mt-1 inline-flex items-center gap-1.5 text-xs text-[var(--color-ink-muted)] group-hover:text-[var(--color-ink)] transition-colors duration-150">
-                      <Volume2 className="w-3.5 h-3.5" />
-                      <span>Rasguear acorde</span>
-                    </span>
-                  </button>
-
-                  <span className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface-subtle)] px-2 py-0.5 font-mono text-[11px] uppercase text-[var(--color-ink-secondary)]">
-                    {voicing.difficulty === 'open' ? 'Abierto' : 'Cejilla'}
-                  </span>
-                </div>
-
-                {/* Recessed Fretboard Container */}
-                <div
-                  onClick={() => handleChordPreview(slot.slotIndex, slot.chord.symbol)}
-                  className="mt-4 rounded-[12px] border border-[var(--color-border)] bg-[var(--color-surface-board)] py-3 px-2 flex flex-col items-center justify-center cursor-pointer hover:border-[var(--color-ink-muted)] transition-colors duration-150"
-                >
-                  <Fretboard
-                    frets={voicing.frets}
-                    fingers={voicing.fingers}
-                    rootStrings={voicing.rootStrings}
-                    startFret={voicing.startFret}
-                    barre={voicing.barre}
-                    isActive={isActive}
-                    pluckTick={manualPluckTicks[slot.slotIndex] + (isActive ? 1 : 0)}
-                    onPluckString={(stringIdx) =>
-                      handleSingleStringPluck(slot.slotIndex, voicing, stringIdx)
-                    }
-                  />
-
-                  {/* Synchronized 4-Beat Progress Bar */}
-                  <div className="mt-2.5 grid grid-cols-4 gap-1.5 w-full max-w-[144px] px-1">
-                    {[0, 1, 2, 3].map((beat) => {
-                      const lit = isActive && activeBeat >= beat;
-                      const current = isActive && activeBeat === beat;
-                      return (
-                        <span
-                          key={beat}
-                          className="h-1 rounded-full transition-colors duration-150"
-                          style={{
-                            backgroundColor: current
-                              ? 'var(--color-accent)'
-                              : lit
-                                ? 'var(--color-accent-border)'
-                                : 'var(--color-border)',
-                          }}
-                        />
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* Concise Plain-Spanish Explanation */}
-                <p className="mt-3.5 text-sm text-[var(--color-ink-secondary)] leading-relaxed">
-                  {slot.roleHint}
-                </p>
-              </div>
-
-              {/* Swap Chord Button */}
-              <div className="mt-4 pt-3 border-t border-[var(--color-border)]">
-                <button
-                  type="button"
-                  onClick={() => onToggleEditSlot(slot.slotIndex)}
-                  className={`w-full py-2 px-3 text-xs rounded-full border font-medium inline-flex items-center justify-center gap-1.5 transition-colors duration-150 cursor-pointer ${
-                    isEditing
-                      ? 'border-[var(--color-ink)] bg-[var(--color-ink)] text-white'
-                      : 'border-[var(--color-border)] bg-transparent text-[var(--color-ink)] hover:border-[var(--color-ink-muted)] hover:bg-[var(--color-surface-subtle)]'
-                  }`}
-                >
-                  {isEditing ? (
-                    <>
-                      <X className="w-3.5 h-3.5" />
-                      <span>Cerrar opciones</span>
-                    </>
-                  ) : (
-                    <>
-                      <ArrowLeftRight className="w-3.5 h-3.5" />
-                      <span>Cambiar acorde</span>
-                    </>
-                  )}
-                </button>
-              </div>
-            </motion.article>
-          );
-        })}
+              <ArrowLeftRight size={15} aria-hidden="true" />
+              {isEditing ? 'Cerrar opciones' : 'Cambiar acorde'}
+            </button>
+          </div>
+          <div className="studio-beats" aria-hidden="true">
+            {[0, 1, 2, 3].map((beat) => (
+              <span key={beat} data-active={isPlayingChord && activeBeat >= beat} />
+            ))}
+          </div>
+        </div>
+        <div className="studio-chord-shape">
+          <span>Digitación · {voicing.difficulty === 'open' ? 'Abierto' : 'Cejilla'}</span>
+          <Fretboard
+            frets={voicing.frets}
+            fingers={voicing.fingers}
+            rootStrings={voicing.rootStrings}
+            startFret={voicing.startFret}
+            barre={voicing.barre}
+            isActive={isPlayingChord}
+            pluckTick={manualPluckTicks[currentIndex] + (isPlayingChord ? 1 : 0)}
+            onPluckString={(index) => handleSingleStringPluck(currentIndex, voicing, index)}
+          />
+        </div>
       </div>
 
       {/* Concise Diagram Legend */}

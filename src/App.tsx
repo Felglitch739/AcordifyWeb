@@ -1,26 +1,21 @@
-import { useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { AnimatePresence, MotionConfig, motion } from 'motion/react';
-import { BookMarked, Compass, Layers, Music2, SlidersHorizontal, User } from 'lucide-react';
+import { BookMarked, Compass, Layers, Music2, Play, SlidersHorizontal, Square, User } from 'lucide-react';
 import {
   useProgressionPlayer,
   type GuitarTone,
   type StrumPatternId,
 } from './audio';
-import {
-  AcordifyLogo,
-  AcordifyWordmark,
-  AiInspirationPanel,
-  AuthModal,
-  CircleOfFifthsView,
-  KeyMoodPicker,
-  LandingPage,
-  ProgressionStrip,
-  SavedProgressionsDrawer,
-  ScalePracticeView,
-  ToastContainer,
-  TransportBar,
-  TunerPanel,
-} from './components';
+import { AcordifyLogo, AcordifyWordmark } from './components/AcordifyLogo';
+import { AiInspirationPanel } from './components/AiInspirationPanel';
+import { AuthModal } from './components/AuthModal';
+import { KeyMoodPicker } from './components/KeyMoodPicker';
+import { LandingPage, type PracticePreset } from './components/LandingPage';
+import { ProgressionStrip } from './components/ProgressionStrip';
+import { SavedProgressionsDrawer } from './components/SavedProgressionsDrawer';
+import { ToastContainer } from './components/Toast';
+import { TransportBar } from './components/TransportBar';
+import { TunerPanel } from './components/TunerPanel';
 import { useToast } from './hooks/useToast';
 import {
   createCloudProgression,
@@ -54,6 +49,13 @@ import {
   type Mode,
   type MoodId,
 } from './theory';
+
+const CircleOfFifthsView = lazy(() =>
+  import('./components/CircleOfFifthsView').then((module) => ({ default: module.CircleOfFifthsView })),
+);
+const ScalePracticeView = lazy(() =>
+  import('./components/ScalePracticeView').then((module) => ({ default: module.ScalePracticeView })),
+);
 
 function NeonSessionBridge({
   client,
@@ -100,7 +102,7 @@ type AppSurface = 'landing' | 'studio';
 
 const SUITE_TABS: readonly { id: SuiteSection; label: string; hash: string }[] = [
   { id: 'progressions', label: 'Progresiones', hash: '#progresiones' },
-  { id: 'circle', label: 'Círculo', hash: '#circulo' },
+  { id: 'circle', label: 'Círculo de quintas', hash: '#circulo' },
   { id: 'scales', label: 'Escalas', hash: '#escalas' },
 ] as const;
 
@@ -154,6 +156,8 @@ function createInitialState(): { progression: GeneratedProgression; bpm: number 
 
 function App() {
   const [initial] = useState(createInitialState);
+  const studioMainRef = useRef<HTMLElement>(null);
+  const focusStudioOnEntry = useRef(false);
   const [surface, setSurface] = useState<AppSurface>(resolveInitialSurface);
   const [activeSection, setActiveSection] = useState<SuiteSection>(resolveInitialSection);
   const [progression, setProgression] = useState<GeneratedProgression>(initial.progression);
@@ -446,20 +450,23 @@ function App() {
     }
   };
 
-  const handleComposeFromTool = (keyRoot: string, mode: Mode) => {
+  const handleComposeFromTool = (keyRoot: string, mode: Mode, degrees?: readonly number[]) => {
     if (player.isPlaying) {
       player.stop();
     }
-    const nextProg = generateProgression(keyRoot, mode, progression.mood, 0);
+    const nextProg = degrees
+      ? buildProgressionFromDegrees(keyRoot, mode, progression.mood, degrees, 'Ejemplo del círculo de quintas')
+      : generateProgression(keyRoot, mode, progression.mood, 0);
     setVariantIndex(0);
     setEditingSlotIndex(null);
     setProgression(nextProg);
     setBpm(nextProg.suggestedBpm);
     setActiveSection('progressions');
+    studioMainRef.current?.focus({ preventScroll: true });
     if (typeof window !== 'undefined') {
       try {
         window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}#progresiones`);
-        window.scrollTo({ top: 0, behavior: 'smooth' });
+        window.scrollTo({ top: 0 });
       } catch {
         // Ignore scroll/history errors
       }
@@ -472,19 +479,22 @@ function App() {
 
   const handleEnterStudio = (
     initialSection: SuiteSection = 'progressions',
-    preset?: { keyRoot: string; mode: Mode },
+    preset?: PracticePreset,
   ) => {
     if (player.isPlaying) {
       player.stop();
     }
     if (preset) {
-      const nextProg = generateProgression(preset.keyRoot, preset.mode, progression.mood, 0);
+      const nextProg = preset.degrees
+        ? buildProgressionFromDegrees(preset.keyRoot, preset.mode, progression.mood, preset.degrees, 'Vuelta de la portada')
+        : generateProgression(preset.keyRoot, preset.mode, progression.mood, 0);
       setVariantIndex(0);
       setEditingSlotIndex(null);
       setProgression(nextProg);
-      setBpm(nextProg.suggestedBpm);
+      setBpm(preset.bpm ?? nextProg.suggestedBpm);
     }
     setActiveSection(initialSection);
+    focusStudioOnEntry.current = true;
     setSurface('studio');
     const targetTab = SUITE_TABS.find((t) => t.id === initialSection);
     if (typeof window !== 'undefined') {
@@ -496,6 +506,12 @@ function App() {
       }
     }
   };
+
+  useEffect(() => {
+    if (surface !== 'studio' || !focusStudioOnEntry.current) return;
+    focusStudioOnEntry.current = false;
+    studioMainRef.current?.focus({ preventScroll: true });
+  }, [surface]);
 
   const handleGoToLanding = () => {
     if (player.isPlaying) {
@@ -542,6 +558,10 @@ function App() {
         />
       ) : (
         <div className="min-h-screen bg-[var(--color-bg)] text-[var(--color-ink)] flex flex-col">
+          <a className="skip-to-content" href="#studio-main" onClick={(event) => {
+            event.preventDefault();
+            studioMainRef.current?.focus();
+          }}>Saltar al estudio</a>
           {/* Clean Sticky Suite Header (Progresiones · Círculo · Escalas + Tools & Optional Google Auth) */}
           <header className="sticky top-0 z-30 border-b border-[var(--color-border)] bg-[var(--color-bg)]/95 backdrop-blur-md">
             <div className="mx-auto max-w-[1160px] h-14 sm:h-16 px-3 sm:px-8 flex items-center justify-between gap-2 sm:gap-4">
@@ -555,9 +575,6 @@ function App() {
                   <AcordifyLogo size={24} />
                   <AcordifyWordmark />
                 </button>
-                <span className="hidden sm:inline-flex rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-0.5 font-mono text-[10px] uppercase tracking-wider text-[var(--color-ink-muted)]">
-                  Guitarra
-                </span>
               </div>
 
               {/* Desktop 3-View Suite Navigation */}
@@ -684,8 +701,8 @@ function App() {
           </header>
 
           {/* Main Generous-Breathing Suite Flow */}
-          <main className="mx-auto w-full max-w-[1160px] flex-1 px-4 sm:px-8 py-7 sm:py-11">
-            <AnimatePresence mode="wait">
+          <main ref={studioMainRef} id="studio-main" tabIndex={-1} className="studio-main mx-auto w-full max-w-[1240px] flex-1 px-4 sm:px-8 py-6 sm:py-9">
+            <AnimatePresence mode="wait" initial={false}>
               {activeSection === 'progressions' ? (
                 <motion.div
                   key="view-progressions"
@@ -705,34 +722,40 @@ function App() {
                     onNextVariant={handleNextVariant}
                     onChangeGuitarTone={setGuitarTone}
                     onChangeStrumPattern={setStrumPattern}
-                  />
+                  >
+                    <div className="studio-playback-head">
+                      <button type="button" className="studio-play" aria-pressed={player.isPlaying} onClick={() => void player.toggle()}>
+                        {player.isPlaying ? <Square size={16} fill="currentColor" aria-hidden="true" /> : <Play size={16} fill="currentColor" aria-hidden="true" />}
+                        {player.isPlaying ? 'Detener vuelta' : 'Escuchar vuelta'}
+                      </button>
+                      <span>{bpm} BPM</span>
+                    </div>
+                    <ProgressionStrip
+                      progression={progression}
+                      activeChordIndex={player.activeChordIndex}
+                      activeBeat={player.activeBeat}
+                      editingSlotIndex={editingSlotIndex}
+                      onToggleEditSlot={handleToggleEditSlot}
+                      onReplaceChord={handleReplaceChord}
+                      onPreviewChord={(symbol) => void player.previewChord(symbol)}
+                      onPluckNote={(noteName) => void player.previewNote(noteName)}
+                    />
+                    <TransportBar
+                      isPlaying={player.isPlaying}
+                      bpm={bpm}
+                      activeBeat={player.activeBeat}
+                      countInBeat={player.countInBeat}
+                      metronomeEnabled={metronomeEnabled}
+                      countInEnabled={countInEnabled}
+                      defaultSaveName={defaultSaveName}
+                      onChangeBpm={setBpm}
+                      onToggleMetronome={() => setMetronomeEnabled((v) => !v)}
+                      onToggleCountIn={() => setCountInEnabled((v) => !v)}
+                      onShare={() => void handleShare()}
+                      onSave={(name) => void handleSave(name)}
+                    />
 
-                  <TransportBar
-                    isPlaying={player.isPlaying}
-                    bpm={bpm}
-                    activeBeat={player.activeBeat}
-                    countInBeat={player.countInBeat}
-                    metronomeEnabled={metronomeEnabled}
-                    countInEnabled={countInEnabled}
-                    defaultSaveName={defaultSaveName}
-                    onTogglePlay={() => void player.toggle()}
-                    onChangeBpm={setBpm}
-                    onToggleMetronome={() => setMetronomeEnabled((v) => !v)}
-                    onToggleCountIn={() => setCountInEnabled((v) => !v)}
-                    onShare={() => void handleShare()}
-                    onSave={(name) => void handleSave(name)}
-                  />
-
-                  <ProgressionStrip
-                    progression={progression}
-                    activeChordIndex={player.activeChordIndex}
-                    activeBeat={player.activeBeat}
-                    editingSlotIndex={editingSlotIndex}
-                    onToggleEditSlot={handleToggleEditSlot}
-                    onReplaceChord={handleReplaceChord}
-                    onPreviewChord={(symbol) => void player.previewChord(symbol)}
-                    onPluckNote={(noteName) => void player.previewNote(noteName)}
-                  />
+                  </KeyMoodPicker>
 
                   <AiInspirationPanel
                     chords={chordSymbols}
@@ -752,13 +775,15 @@ function App() {
                   exit={{ opacity: 0, transition: { duration: 0.08 } }}
                   transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
                 >
-                  <CircleOfFifthsView
-                    activeKeyRoot={progression.keyRoot}
-                    activeMode={progression.mode}
-                    onPreviewChord={(symbol) => void player.previewChord(symbol)}
-                    onPluckNote={(noteName) => void player.previewNote(noteName)}
-                    onComposeInKey={handleComposeFromTool}
-                  />
+                  <Suspense fallback={<p role="status">Cargando herramienta…</p>}>
+                    <CircleOfFifthsView
+                      activeKeyRoot={progression.keyRoot}
+                      activeMode={progression.mode}
+                      onPreviewChord={(symbol) => void player.previewChord(symbol)}
+                      onPluckNote={(noteName) => void player.previewNote(noteName)}
+                      onPracticeExample={handleComposeFromTool}
+                    />
+                  </Suspense>
                 </motion.div>
               ) : (
                 <motion.div
@@ -768,20 +793,22 @@ function App() {
                   exit={{ opacity: 0, transition: { duration: 0.08 } }}
                   transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
                 >
-                  <ScalePracticeView
-                    initialRoot={progression.keyRoot}
-                    initialMode={progression.mode}
-                    onPluckNote={(scientificNote) => void player.previewNote(scientificNote)}
-                    onPreviewChord={(symbol) => void player.previewChord(symbol)}
-                    onPracticeProgression={handleComposeFromTool}
-                  />
+                  <Suspense fallback={<p role="status">Cargando herramienta…</p>}>
+                    <ScalePracticeView
+                      initialRoot={progression.keyRoot}
+                      initialMode={progression.mode}
+                      onPluckNote={(scientificNote) => void player.previewNote(scientificNote)}
+                      onPreviewChord={(symbol) => void player.previewChord(symbol)}
+                      onPracticeProgression={handleComposeFromTool}
+                    />
+                  </Suspense>
                 </motion.div>
               )}
             </AnimatePresence>
           </main>
 
           <footer className="border-t border-[var(--color-border)] py-5 px-4 sm:px-8 text-center text-xs text-[var(--color-ink-muted)]">
-            Acordify · Guitarra: progresiones, círculo de quintas, escalas y afinador directo en tu navegador.
+            Acordify · Estudio de práctica para guitarra
           </footer>
 
           <SavedProgressionsDrawer

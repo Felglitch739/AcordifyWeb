@@ -152,6 +152,7 @@ export const TunerPanel: React.FC<TunerPanelProps> = ({
   const activeTuningTitle = activeSavedCustom ? activeSavedCustom.name : selectedPreset.name;
   const activeTuningSequence = formatTuningSequence(activeStrings);
 
+  const tunerDialogRef = useRef<HTMLDivElement>(null);
   const audioCtxRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -262,6 +263,17 @@ export const TunerPanel: React.FC<TunerPanelProps> = ({
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isOpen, handleClose]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const dialog = tunerDialogRef.current;
+    if (!dialog) return;
+    const opener = document.activeElement;
+    dialog.querySelector<HTMLElement>('[data-tuner-initial-focus]')?.focus();
+    return () => {
+      if (opener instanceof HTMLElement && opener.isConnected) opener.focus();
+    };
+  }, [isOpen]);
 
   const resetSessionProgress = useCallback(() => {
     setTunedStrings([]);
@@ -599,12 +611,29 @@ export const TunerPanel: React.FC<TunerPanelProps> = ({
         >
           <motion.div
             key="tuner-modal"
+            ref={tunerDialogRef}
+            onKeyDown={(event) => {
+              if (event.key !== 'Tab') return;
+              const controls = Array.from(event.currentTarget.querySelectorAll<HTMLElement>(
+                'button:not([disabled]), select:not([disabled]), input:not([disabled]), [tabindex="0"]',
+              )).filter((control) => control.getClientRects().length > 0);
+              const first = controls[0];
+              const last = controls.at(-1);
+              if (!first || !last) return;
+              if (event.shiftKey && document.activeElement === first) {
+                event.preventDefault();
+                last.focus();
+              } else if (!event.shiftKey && document.activeElement === last) {
+                event.preventDefault();
+                first.focus();
+              }
+            }}
             initial={{ opacity: 0, y: 12, scale: 0.985 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 8, scale: 0.985 }}
             transition={{ type: 'spring', stiffness: 420, damping: 32 }}
             onClick={(e) => e.stopPropagation()}
-            className="surface-card w-full max-w-xl max-h-[92vh] overflow-y-auto p-4 sm:p-6 shadow-[0_24px_60px_-20px_rgba(17,17,17,0.34)]"
+            className="surface-card w-full max-w-xl max-h-[92dvh] overflow-y-auto p-4 sm:p-6 shadow-[0_24px_60px_-20px_rgba(17,17,17,0.34)]"
           >
             {/* Header */}
             <div className="flex items-start justify-between gap-3 border-b border-[var(--color-border)] pb-3.5">
@@ -634,9 +663,44 @@ export const TunerPanel: React.FC<TunerPanelProps> = ({
                 onClick={handleClose}
                 className="btn-secondary shrink-0 px-3 py-1.5 text-xs"
                 aria-label="Cerrar afinador"
+                data-tuner-initial-focus
               >
                 <X className="w-3.5 h-3.5" />
                 <span>Cerrar</span>
+              </button>
+            </div>
+
+            <div className="mt-4 flex flex-col sm:flex-row gap-2.5">
+              {!isListening ? (
+                <button
+                  type="button"
+                  onClick={() => void startListening()}
+                  className="btn-primary flex-1 min-h-11 px-4 py-2.5 text-sm"
+                >
+                  <Mic className="w-4 h-4" />
+                  <span>Activar micrófono</span>
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={stopListening}
+                  className="flex-1 inline-flex items-center justify-center gap-2 rounded-full bg-[var(--color-accent)] min-h-11 px-4 py-2.5 text-sm font-medium text-white hover:opacity-90 transition-opacity cursor-pointer"
+                >
+                  <MicOff className="w-4 h-4" />
+                  <span>Detener micrófono</span>
+                </button>
+              )}
+
+              <button
+                type="button"
+                onClick={() => void playReferenceTone(activeReferenceString)}
+                className="btn-secondary min-h-11 px-4 py-2.5 text-sm"
+              >
+                <Volume2 className="w-4 h-4" />
+                <span>
+                  Escuchar {activeReferenceString.stringNumber}ª ({activeReferenceString.label}
+                  {activeReferenceString.octave})
+                </span>
               </button>
             </div>
 
@@ -647,7 +711,7 @@ export const TunerPanel: React.FC<TunerPanelProps> = ({
                   aria-label="Seleccionar afinación"
                   value={selectValue}
                   onChange={(e) => handleSelectTuningChange(e.target.value)}
-                  className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-1.5 text-xs font-medium text-[var(--color-ink)] focus:border-[var(--color-ink)] focus:outline-none cursor-pointer"
+                  className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-1.5 text-xs font-medium text-[var(--color-ink)] focus:border-[var(--color-ink)] cursor-pointer"
                 >
                   <optgroup label="Afinaciones populares">
                     {TUNING_PRESETS.filter((p) => p.id !== 'custom').map((preset) => (
@@ -965,7 +1029,7 @@ export const TunerPanel: React.FC<TunerPanelProps> = ({
                       value={customNameInput}
                       onChange={(e) => setCustomNameInput(e.target.value)}
                       placeholder="Ej. Mi afinación abierta"
-                      className="flex-1 min-w-0 rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] px-3.5 py-1.5 text-xs text-[var(--color-ink)] placeholder:text-[var(--color-ink-muted)] focus:border-[var(--color-ink)] focus:outline-none"
+                      className="flex-1 min-w-0 rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] px-3.5 py-1.5 text-xs text-[var(--color-ink)] placeholder:text-[var(--color-ink-muted)] focus:border-[var(--color-ink)]"
                     />
                     <button type="submit" className="btn-primary px-4 py-1.5 text-xs shrink-0">
                       Guardar afinación
@@ -1271,41 +1335,6 @@ export const TunerPanel: React.FC<TunerPanelProps> = ({
                 {micError}
               </div>
             )}
-
-            {/* Bottom Actions */}
-            <div className="mt-4 flex flex-col sm:flex-row gap-2.5">
-              {!isListening ? (
-                <button
-                  type="button"
-                  onClick={() => void startListening()}
-                  className="btn-primary flex-1 px-4 py-2.5 text-sm"
-                >
-                  <Mic className="w-4 h-4" />
-                  <span>Activar micrófono</span>
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={stopListening}
-                  className="flex-1 inline-flex items-center justify-center gap-2 rounded-full bg-[var(--color-accent)] px-4 py-2.5 text-sm font-medium text-white hover:opacity-90 transition-opacity cursor-pointer"
-                >
-                  <MicOff className="w-4 h-4" />
-                  <span>Detener micrófono</span>
-                </button>
-              )}
-
-              <button
-                type="button"
-                onClick={() => void playReferenceTone(activeReferenceString)}
-                className="btn-secondary px-4 py-2.5 text-sm"
-              >
-                <Volume2 className="w-4 h-4" />
-                <span>
-                  Escuchar {activeReferenceString.stringNumber}ª ({activeReferenceString.label}
-                  {activeReferenceString.octave})
-                </span>
-              </button>
-            </div>
 
             <p className="mt-3 text-xs text-[var(--color-ink-muted)] text-center sm:text-left">
               Todo el análisis ocurre directo en tu navegador; ningún audio sale de tu dispositivo.

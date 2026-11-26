@@ -186,7 +186,7 @@ export const Fretboard: React.FC<FretboardProps> = ({
                 const cy = fretsY[relativeBarreFret - 1] + 12.5;
                 return (
                   <g key={`barre-root-${strIdx}`}>
-                    <circle cx={stringsX[strIdx]} cy={cy} r="7.2" fill="#E85D3D" />
+                    <circle cx={stringsX[strIdx]} cy={cy} r="7.2" fill="var(--color-accent)" />
                     <text
                       x={stringsX[strIdx]}
                       y={cy + 3}
@@ -247,7 +247,7 @@ export const Fretboard: React.FC<FretboardProps> = ({
                 cx={x}
                 cy="10"
                 r="4.2"
-                stroke={isRoot ? '#E85D3D' : '#111111'}
+                stroke={isRoot ? 'var(--color-accent)' : '#111111'}
                 fill={isRoot ? 'rgba(232, 93, 61, 0.14)' : 'transparent'}
                 strokeWidth={isRoot ? 2.2 : 1.7}
               />
@@ -273,7 +273,7 @@ export const Fretboard: React.FC<FretboardProps> = ({
                   cx={x}
                   cy={cy}
                   r="7.4"
-                  fill={isRoot ? '#E85D3D' : '#111111'}
+                  fill={isRoot ? 'var(--color-accent)' : '#111111'}
                 />
                 {fingerNum > 0 && (
                   <text

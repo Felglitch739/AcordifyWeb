@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { motion } from 'motion/react';
-import { Compass, Layers, Play, Square, Timer, Volume2 } from 'lucide-react';
+import { Play, Square, Timer, Volume2 } from 'lucide-react';
 import { playWoodblockClick } from '../audio/karplusStrong';
 import {
   PRACTICE_SCALES,
@@ -311,37 +311,396 @@ export const ScalePracticeView: React.FC<ScalePracticeViewProps> = ({
 
   return (
     <section aria-label="Entrenador de escalas" className="space-y-6">
-      {/* Editorial Header */}
-      <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
-        <div className="space-y-1.5">
-          <p className="inline-flex items-center gap-1.5 font-mono text-xs uppercase tracking-[0.14em] text-[var(--color-ink-muted)]">
-            <Layers className="w-3.5 h-3.5" />
-            <span>Paso a paso · Dedos, orden y sonido</span>
-          </p>
-          <h1 className="text-[32px] sm:text-[42px] font-medium tracking-[-0.03em] leading-[1.08] text-[var(--color-ink)]">
-            {selectedRoot}{' '}
-            <span className="font-editorial text-[var(--color-ink-secondary)]">
-              — {scaleDef.name}
-            </span>
-          </h1>
-          <p className="text-sm text-[var(--color-ink-secondary)] max-w-2xl">
-            {scaleDef.description}
-          </p>
-        </div>
-
-        <button
-          type="button"
-          onClick={() => onPracticeProgression(selectedRoot, scaleDef.compatibleMode)}
-          className="btn-secondary bg-[var(--color-surface)] self-start md:self-auto shrink-0 px-4 py-2 text-xs"
-        >
-          <Compass className="w-3.5 h-3.5" />
-          <span>
-            Cargar acordes en {selectedRoot}{' '}
-            {scaleDef.compatibleMode === 'major' ? 'Mayor' : 'Menor'}
-          </span>
-        </button>
+      <div className="studio-heading">
+        <h1>{selectedRoot} <span>{scaleDef.name}</span></h1>
+        <p>{scaleDef.description}</p>
       </div>
 
+      {/* Fretboard + Where to Start Guidance + Practice Player */}
+      <div className="surface-card p-4 sm:p-5 space-y-4">
+        {/* Por dónde empezar strip */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 rounded-[12px] border border-[var(--color-border)] bg-[var(--color-surface-board)] px-4 py-3">
+          <p className="text-sm text-[var(--color-ink)] font-medium">
+            {activeBox.startInstruction}
+          </p>
+          {activeStep && (
+            <span className="font-mono text-xs text-[var(--color-ink-secondary)]">
+              {!isPlaying && activeNoteId === null ? 'Listo para practicar · ' : ''}
+              Paso {activeStep.order}/{activeBox.ascendingSteps.length} ·{' '}
+              <strong className="text-[var(--color-ink)]">{activeStep.scientificNote}</strong> ·{' '}
+              {activeStep.finger === 0 ? 'Al aire' : `Dedo ${activeStep.finger}`} · Grado{' '}
+              {activeStep.degreeLabel}
+            </span>
+          )}
+        </div>
+
+        {/* Interactive Horizontal Neck SVG */}
+        <div className="w-full overflow-x-auto rounded-[12px] border border-[var(--color-border)] bg-[var(--color-surface-board)] py-3 px-2">
+          <svg
+            viewBox={`0 0 ${SVG_W} ${SVG_H}`}
+            style={{ maxWidth: `${Math.min(720, Math.round(SVG_W * 1.45))}px` }}
+            className="mx-auto h-auto w-full select-none"
+          >
+            {/* Fretboard boundary lines */}
+            {Array.from({ length: fretCount + 1 }, (_, i) => {
+              const fretNum = windowStart + i;
+              const x = LEFT_PAD + i * FRET_COL_W;
+              const isNut = fretNum === 0;
+              return (
+                <line
+                  key={`fret-line-${fretNum}`}
+                  x1={x}
+                  y1={TOP_PAD}
+                  x2={x}
+                  y2={TOP_PAD + 5 * STRING_GAP}
+                  stroke={isNut ? '#111111' : '#D4D4D8'}
+                  strokeWidth={isNut ? 5 : 1.3}
+                />
+              );
+            })}
+
+            {/* Fret Inlay Dots + Bottom Numbers */}
+            {Array.from({ length: fretCount }, (_, i) => {
+              const fretNum = windowStart + i;
+              const cx = fretCenterX(fretNum);
+              const midY = TOP_PAD + 2.5 * STRING_GAP;
+              return (
+                <g key={`fret-meta-${fretNum}`}>
+                  {INLAY_FRETS.has(fretNum) && (
+                    <circle cx={cx} cy={midY} r={5} fill="#E4E4E7" />
+                  )}
+                  {fretNum === 12 && (
+                    <>
+                      <circle cx={cx} cy={midY - STRING_GAP} r={5} fill="#E4E4E7" />
+                      <circle cx={cx} cy={midY + STRING_GAP} r={5} fill="#E4E4E7" />
+                    </>
+                  )}
+                  <text
+                    x={cx}
+                    y={SVG_H - 10}
+                    textAnchor="middle"
+                    fill="#71717A"
+                    className="font-mono text-[11px]"
+                  >
+                    {fretNum === 0 ? 'Al aire' : `Tr. ${fretNum}`}
+                  </text>
+                </g>
+              );
+            })}
+
+            {/* 6 Horizontal Guitar Strings */}
+            {DISPLAY_STRINGS.map((strNum) => {
+              const y = stringY(strNum);
+              const thickness = 0.9 + (strNum - 1) * 0.28;
+              return (
+                <g key={`str-${strNum}`}>
+                  <text
+                    x={LEFT_PAD - 14}
+                    y={y + 4}
+                    textAnchor="end"
+                    fill="#71717A"
+                    className="font-mono text-[12px] font-medium"
+                  >
+                    {STRING_OPEN_LABELS[strNum]}
+                  </text>
+                  <line
+                    x1={LEFT_PAD}
+                    y1={y}
+                    x2={SVG_W - RIGHT_PAD}
+                    y2={y}
+                    stroke="#52525B"
+                    strokeWidth={thickness}
+                  />
+                </g>
+              );
+            })}
+
+            {/* Optional Adjacent Box Connection Ghost Notes */}
+            {nextBoxDisplayNotes.map((ghost) => {
+              const cx = fretCenterX(ghost.fret);
+              const cy = stringY(ghost.stringNumber);
+              return (
+                <g
+                  key={`ghost-${ghost.stringNumber}-${ghost.fret}`}
+                  className="pointer-events-none opacity-65"
+                >
+                  <circle
+                    cx={cx}
+                    cy={cy}
+                    r={11}
+                    fill="#FFFFFF"
+                    stroke="#71717A"
+                    strokeWidth={1.5}
+                    strokeDasharray="3 2"
+                  />
+                  <text
+                    x={cx}
+                    y={cy + 3.5}
+                    textAnchor="middle"
+                    fill="#71717A"
+                    className="font-mono text-[10px]"
+                  >
+                    {ghost.noteName}
+                  </text>
+                </g>
+              );
+            })}
+
+            {/* Interactive Active Box Scale Notes */}
+            {activeBox.notes.map((note) => {
+              const cx = fretCenterX(note.fret);
+              const cy = stringY(note.stringNumber);
+              const isCurrent = activeNoteId === note.id;
+
+              const fill = note.isRoot
+                ? 'var(--color-accent)'
+                : note.isBlueNote
+                  ? '#FFFFFF'
+                  : '#111111';
+              const textColor = note.isBlueNote ? '#111111' : '#FFFFFF';
+              const stroke = note.isBlueNote ? '#111111' : isCurrent ? 'var(--color-accent)' : '#FFFFFF';
+
+              return (
+                <g
+                  key={note.id}
+                  role="button"
+                  tabIndex={0}
+                  aria-label={`Nota ${note.scientificNote}, cuerda ${note.stringNumber}ª traste ${note.fret}, dedo ${note.finger}`}
+                  onClick={() => handleClickNote(note)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      handleClickNote(note);
+                    }
+                  }}
+                  className="cursor-pointer"
+                >
+                  {isCurrent && (
+                    <motion.circle
+                      cx={cx}
+                      cy={cy}
+                      fill="none"
+                      stroke="var(--color-accent)"
+                      strokeWidth={2.5}
+                      initial={{ r: 14, opacity: 0.85 }}
+                      animate={{ r: 18.5, opacity: 1 }}
+                      transition={{ type: 'spring', stiffness: 400, damping: 24 }}
+                    />
+                  )}
+                  {note.isBlueNote && (
+                    <circle
+                      cx={cx}
+                      cy={cy}
+                      r={15.5}
+                      fill="none"
+                      stroke="var(--color-accent)"
+                      strokeWidth={1.2}
+                      strokeDasharray="2 2"
+                    />
+                  )}
+                  <circle
+                    cx={cx}
+                    cy={cy}
+                    r={13}
+                    fill={fill}
+                    stroke={stroke}
+                    strokeWidth={note.isBlueNote ? 2.2 : 1.5}
+                  />
+                  <text
+                    x={cx}
+                    y={cy + 4}
+                    textAnchor="middle"
+                    fill={textColor}
+                    className="font-mono text-[11px] font-semibold"
+                  >
+                    {getDotText(note)}
+                  </text>
+                </g>
+              );
+            })}
+          </svg>
+        </div>
+
+        {/* Diagram Legend */}
+        <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-[var(--color-ink-muted)]">
+          <div className="flex flex-wrap items-center gap-4 font-mono text-[11px]">
+            <span className="inline-flex items-center gap-1.5">
+              <span className="h-3 w-3 rounded-full bg-[var(--color-accent)]" />
+              <span>Raíz ({selectedRoot})</span>
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <span className="h-3 w-3 rounded-full bg-[var(--color-ink)]" />
+              <span>Nota de la escala</span>
+            </span>
+            {selectedScaleId === 'minor-blues' && (
+              <span className="inline-flex items-center gap-1.5">
+                <span className="h-3 w-3 rounded-full border-2 border-[var(--color-ink)] bg-white" />
+                <span>Nota azul (b5)</span>
+              </span>
+            )}
+            <span className="inline-flex items-center gap-1.5">
+              <span className="h-2.5 w-2.5 rounded-full bg-[#E4E4E7]" />
+              <span>Punto gris = guía de traste (3, 5, 7, 9, 12)</span>
+            </span>
+          </div>
+          <span>Pulsa cualquier punto para escucharlo</span>
+        </div>
+
+        {/* Step-by-Step Practice Transport */}
+        <div className="pt-3 border-t border-[var(--color-border)] flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={handleTogglePlay}
+              className={`rounded-full px-4 py-2 text-xs font-medium inline-flex items-center gap-2 transition-colors cursor-pointer ${
+                isPlaying
+                  ? 'bg-[var(--color-accent)] text-white hover:opacity-90'
+                  : 'bg-[var(--color-ink)] text-white hover:opacity-88'
+              }`}
+            >
+              {isPlaying ? (
+                <>
+                  <Square className="w-3.5 h-3.5 fill-current" />
+                  <span>Detener</span>
+                </>
+              ) : (
+                <>
+                  <Play className="w-3.5 h-3.5 fill-current" />
+                  <span>Practicar escala</span>
+                </>
+              )}
+            </button>
+
+            <div
+              className="inline-flex rounded-full bg-[var(--color-surface-subtle)] p-1"
+              role="group"
+              aria-label="Dirección de práctica"
+            >
+              {(
+                [
+                  { id: 'up', label: 'Subir' },
+                  { id: 'down', label: 'Bajar' },
+                  { id: 'updown', label: 'Subir y bajar' },
+                ] as const
+              ).map((dir) => {
+                const active = direction === dir.id;
+                return (
+                  <button
+                    key={dir.id}
+                    type="button"
+                    onClick={() => handleChangeDirection(dir.id)}
+                    className={`relative px-3 py-1 rounded-full text-xs font-medium cursor-pointer transition-colors ${
+                      active
+                        ? 'text-[var(--color-ink)]'
+                        : 'text-[var(--color-ink-secondary)] hover:text-[var(--color-ink)]'
+                    }`}
+                  >
+                    {active && (
+                      <motion.span
+                        layoutId="scale-dir-pill"
+                        transition={{ type: 'spring', stiffness: 460, damping: 34 }}
+                        className="absolute inset-0 rounded-full bg-[var(--color-surface)] border border-[var(--color-border)] shadow-xs"
+                        aria-hidden="true"
+                      />
+                    )}
+                    <span className="relative z-10">{dir.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex flex-wrap items-center gap-1.5 rounded-full border border-[var(--color-border)] bg-[var(--color-surface-board)] px-2.5 py-1">
+              {[60, 80, 100, 120].map((presetBpm) => (
+                <button
+                  key={presetBpm}
+                  type="button"
+                  onClick={() => handleChangeBpm(presetBpm)}
+                  className={`rounded-full px-2 py-0.5 font-mono text-[11px] cursor-pointer transition-colors ${
+                    bpm === presetBpm
+                      ? 'bg-[var(--color-ink)] text-white'
+                      : 'text-[var(--color-ink-secondary)] hover:text-[var(--color-ink)]'
+                  }`}
+                >
+                  {presetBpm}
+                </button>
+              ))}
+              <input
+                id="scale-bpm-slider"
+                type="range"
+                min={45}
+                max={150}
+                step={1}
+                value={bpm}
+                onChange={(e) => handleChangeBpm(Number(e.target.value))}
+                aria-label="Tempo de escala en BPM"
+                className="studio-slider w-[220px] max-w-[54vw] ml-1"
+              />
+              <div className="flex items-center gap-1 pl-1.5 border-l border-[var(--color-border)]">
+                <input
+                  id="scale-bpm-number-input"
+                  type="number"
+                  min={45}
+                  max={150}
+                  value={bpm}
+                  aria-label="Escribir BPM de escala"
+                  onChange={(e) => {
+                    const parsed = Number(e.target.value);
+                    if (Number.isFinite(parsed) && parsed > 0) {
+                      handleChangeBpm(parsed);
+                    }
+                  }}
+                  className="w-10 bg-transparent text-center font-mono text-xs font-medium text-[var(--color-ink)] num-tabular"
+                />
+                <span className="font-mono text-[11px] text-[var(--color-ink-muted)]">BPM</span>
+              </div>
+            </div>
+
+            <div
+              className="inline-flex rounded-full bg-[var(--color-surface-subtle)] p-1"
+              role="group"
+              aria-label="Subdivisión rítmica"
+            >
+              {(
+                [
+                  { id: 'quarter', label: 'Negras' },
+                  { id: 'eighth', label: 'Corcheas' },
+                ] as const
+              ).map((sub) => (
+                <button
+                  key={sub.id}
+                  type="button"
+                  onClick={() => handleChangeSubdivision(sub.id)}
+                  className={`px-2.5 py-1 rounded-full text-xs font-medium cursor-pointer transition-colors ${
+                    subdivision === sub.id
+                      ? 'bg-[var(--color-surface)] text-[var(--color-ink)] border border-[var(--color-border)]'
+                      : 'text-[var(--color-ink-secondary)] hover:text-[var(--color-ink)]'
+                  }`}
+                >
+                  {sub.label}
+                </button>
+              ))}
+            </div>
+
+            <button
+              type="button"
+              aria-pressed={metronomeEnabled}
+              onClick={() => setMetronomeEnabled((v) => !v)}
+              className={`rounded-full border px-3 py-1.5 text-xs font-medium inline-flex items-center gap-1.5 cursor-pointer transition-colors ${
+                metronomeEnabled
+                  ? 'border-[var(--color-ink)] bg-[var(--color-ink)] text-white'
+                  : 'border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-ink)] hover:border-[var(--color-ink-muted)]'
+              }`}
+            >
+              <Timer className="w-3.5 h-3.5" />
+              <span>Metrónomo</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <h2 className="studio-settings-heading">Escala y posición</h2>
       {/* Controls Card */}
       <div className="surface-card p-4 sm:p-5 space-y-4">
         {/* Scale Type + 12 Roots */}
@@ -503,390 +862,6 @@ export const ScalePracticeView: React.FC<ScalePracticeViewProps> = ({
               }`}
             >
               Ver conexión Caja {nextBox.boxNumber}
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* Fretboard + Where to Start Guidance + Practice Player */}
-      <div className="surface-card p-4 sm:p-5 space-y-4">
-        {/* Por dónde empezar strip */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 rounded-[12px] border border-[var(--color-border)] bg-[var(--color-surface-board)] px-4 py-3">
-          <p className="text-sm text-[var(--color-ink)] font-medium">
-            {activeBox.startInstruction}
-          </p>
-          {activeStep && (
-            <span className="font-mono text-xs text-[var(--color-ink-secondary)] whitespace-nowrap">
-              {!isPlaying && activeNoteId === null ? 'Listo para practicar · ' : ''}
-              Paso {activeStep.order}/{activeBox.ascendingSteps.length} ·{' '}
-              <strong className="text-[var(--color-ink)]">{activeStep.scientificNote}</strong> ·{' '}
-              {activeStep.finger === 0 ? 'Al aire' : `Dedo ${activeStep.finger}`} · Grado{' '}
-              {activeStep.degreeLabel}
-            </span>
-          )}
-        </div>
-
-        {/* Interactive Horizontal Neck SVG */}
-        <div className="w-full overflow-x-auto rounded-[12px] border border-[var(--color-border)] bg-[var(--color-surface-board)] py-3 px-2">
-          <svg
-            viewBox={`0 0 ${SVG_W} ${SVG_H}`}
-            style={{ maxWidth: `${Math.min(720, Math.round(SVG_W * 1.45))}px` }}
-            className="mx-auto h-auto w-full select-none"
-          >
-            {/* Fretboard boundary lines */}
-            {Array.from({ length: fretCount + 1 }, (_, i) => {
-              const fretNum = windowStart + i;
-              const x = LEFT_PAD + i * FRET_COL_W;
-              const isNut = fretNum === 0;
-              return (
-                <line
-                  key={`fret-line-${fretNum}`}
-                  x1={x}
-                  y1={TOP_PAD}
-                  x2={x}
-                  y2={TOP_PAD + 5 * STRING_GAP}
-                  stroke={isNut ? '#111111' : '#D4D4D8'}
-                  strokeWidth={isNut ? 5 : 1.3}
-                />
-              );
-            })}
-
-            {/* Fret Inlay Dots + Bottom Numbers */}
-            {Array.from({ length: fretCount }, (_, i) => {
-              const fretNum = windowStart + i;
-              const cx = fretCenterX(fretNum);
-              const midY = TOP_PAD + 2.5 * STRING_GAP;
-              return (
-                <g key={`fret-meta-${fretNum}`}>
-                  {INLAY_FRETS.has(fretNum) && (
-                    <circle cx={cx} cy={midY} r={5} fill="#E4E4E7" />
-                  )}
-                  {fretNum === 12 && (
-                    <>
-                      <circle cx={cx} cy={midY - STRING_GAP} r={5} fill="#E4E4E7" />
-                      <circle cx={cx} cy={midY + STRING_GAP} r={5} fill="#E4E4E7" />
-                    </>
-                  )}
-                  <text
-                    x={cx}
-                    y={SVG_H - 10}
-                    textAnchor="middle"
-                    fill="#71717A"
-                    className="font-mono text-[11px]"
-                  >
-                    {fretNum === 0 ? 'Al aire' : `Tr. ${fretNum}`}
-                  </text>
-                </g>
-              );
-            })}
-
-            {/* 6 Horizontal Guitar Strings */}
-            {DISPLAY_STRINGS.map((strNum) => {
-              const y = stringY(strNum);
-              const thickness = 0.9 + (strNum - 1) * 0.28;
-              return (
-                <g key={`str-${strNum}`}>
-                  <text
-                    x={LEFT_PAD - 14}
-                    y={y + 4}
-                    textAnchor="end"
-                    fill="#71717A"
-                    className="font-mono text-[12px] font-medium"
-                  >
-                    {STRING_OPEN_LABELS[strNum]}
-                  </text>
-                  <line
-                    x1={LEFT_PAD}
-                    y1={y}
-                    x2={SVG_W - RIGHT_PAD}
-                    y2={y}
-                    stroke="#52525B"
-                    strokeWidth={thickness}
-                  />
-                </g>
-              );
-            })}
-
-            {/* Optional Adjacent Box Connection Ghost Notes */}
-            {nextBoxDisplayNotes.map((ghost) => {
-              const cx = fretCenterX(ghost.fret);
-              const cy = stringY(ghost.stringNumber);
-              return (
-                <g
-                  key={`ghost-${ghost.stringNumber}-${ghost.fret}`}
-                  className="pointer-events-none opacity-65"
-                >
-                  <circle
-                    cx={cx}
-                    cy={cy}
-                    r={11}
-                    fill="#FFFFFF"
-                    stroke="#71717A"
-                    strokeWidth={1.5}
-                    strokeDasharray="3 2"
-                  />
-                  <text
-                    x={cx}
-                    y={cy + 3.5}
-                    textAnchor="middle"
-                    fill="#71717A"
-                    className="font-mono text-[10px]"
-                  >
-                    {ghost.noteName}
-                  </text>
-                </g>
-              );
-            })}
-
-            {/* Interactive Active Box Scale Notes */}
-            {activeBox.notes.map((note) => {
-              const cx = fretCenterX(note.fret);
-              const cy = stringY(note.stringNumber);
-              const isCurrent = activeNoteId === note.id;
-
-              const fill = note.isRoot
-                ? '#E85D3D'
-                : note.isBlueNote
-                  ? '#FFFFFF'
-                  : '#111111';
-              const textColor = note.isBlueNote ? '#111111' : '#FFFFFF';
-              const stroke = note.isBlueNote ? '#111111' : isCurrent ? '#E85D3D' : '#FFFFFF';
-
-              return (
-                <g
-                  key={note.id}
-                  role="button"
-                  tabIndex={0}
-                  aria-label={`Nota ${note.scientificNote}, cuerda ${note.stringNumber}ª traste ${note.fret}, dedo ${note.finger}`}
-                  onClick={() => handleClickNote(note)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      e.preventDefault();
-                      handleClickNote(note);
-                    }
-                  }}
-                  className="cursor-pointer"
-                >
-                  {isCurrent && (
-                    <motion.circle
-                      cx={cx}
-                      cy={cy}
-                      fill="none"
-                      stroke="#E85D3D"
-                      strokeWidth={2.5}
-                      initial={{ r: 14, opacity: 0.85 }}
-                      animate={{ r: 18.5, opacity: 1 }}
-                      transition={{ type: 'spring', stiffness: 400, damping: 24 }}
-                    />
-                  )}
-                  {note.isBlueNote && (
-                    <circle
-                      cx={cx}
-                      cy={cy}
-                      r={15.5}
-                      fill="none"
-                      stroke="#E85D3D"
-                      strokeWidth={1.2}
-                      strokeDasharray="2 2"
-                    />
-                  )}
-                  <circle
-                    cx={cx}
-                    cy={cy}
-                    r={13}
-                    fill={fill}
-                    stroke={stroke}
-                    strokeWidth={note.isBlueNote ? 2.2 : 1.5}
-                  />
-                  <text
-                    x={cx}
-                    y={cy + 4}
-                    textAnchor="middle"
-                    fill={textColor}
-                    className="font-mono text-[11px] font-semibold"
-                  >
-                    {getDotText(note)}
-                  </text>
-                </g>
-              );
-            })}
-          </svg>
-        </div>
-
-        {/* Diagram Legend */}
-        <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-[var(--color-ink-muted)]">
-          <div className="flex flex-wrap items-center gap-4 font-mono text-[11px]">
-            <span className="inline-flex items-center gap-1.5">
-              <span className="h-3 w-3 rounded-full bg-[var(--color-accent)]" />
-              <span>Raíz ({selectedRoot})</span>
-            </span>
-            <span className="inline-flex items-center gap-1.5">
-              <span className="h-3 w-3 rounded-full bg-[var(--color-ink)]" />
-              <span>Nota de la escala</span>
-            </span>
-            {selectedScaleId === 'minor-blues' && (
-              <span className="inline-flex items-center gap-1.5">
-                <span className="h-3 w-3 rounded-full border-2 border-[var(--color-ink)] bg-white" />
-                <span>Nota azul (b5)</span>
-              </span>
-            )}
-            <span className="inline-flex items-center gap-1.5">
-              <span className="h-2.5 w-2.5 rounded-full bg-[#E4E4E7]" />
-              <span>Punto gris = guía de traste (3, 5, 7, 9, 12)</span>
-            </span>
-          </div>
-          <span>Pulsa cualquier punto para escucharlo</span>
-        </div>
-
-        {/* Step-by-Step Practice Transport */}
-        <div className="pt-3 border-t border-[var(--color-border)] flex flex-wrap items-center justify-between gap-3">
-          <div className="flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              onClick={handleTogglePlay}
-              className={`rounded-full px-4 py-2 text-xs font-medium inline-flex items-center gap-2 transition-colors cursor-pointer ${
-                isPlaying
-                  ? 'bg-[var(--color-accent)] text-white hover:opacity-90'
-                  : 'bg-[var(--color-ink)] text-white hover:opacity-88'
-              }`}
-            >
-              {isPlaying ? (
-                <>
-                  <Square className="w-3.5 h-3.5 fill-current" />
-                  <span>Detener</span>
-                </>
-              ) : (
-                <>
-                  <Play className="w-3.5 h-3.5 fill-current" />
-                  <span>Practicar escala</span>
-                </>
-              )}
-            </button>
-
-            <div
-              className="inline-flex rounded-full bg-[var(--color-surface-subtle)] p-1"
-              role="group"
-              aria-label="Dirección de práctica"
-            >
-              {(
-                [
-                  { id: 'up', label: 'Subir' },
-                  { id: 'down', label: 'Bajar' },
-                  { id: 'updown', label: 'Subir y bajar' },
-                ] as const
-              ).map((dir) => {
-                const active = direction === dir.id;
-                return (
-                  <button
-                    key={dir.id}
-                    type="button"
-                    onClick={() => handleChangeDirection(dir.id)}
-                    className={`relative px-3 py-1 rounded-full text-xs font-medium cursor-pointer transition-colors ${
-                      active
-                        ? 'text-[var(--color-ink)]'
-                        : 'text-[var(--color-ink-secondary)] hover:text-[var(--color-ink)]'
-                    }`}
-                  >
-                    {active && (
-                      <motion.span
-                        layoutId="scale-dir-pill"
-                        transition={{ type: 'spring', stiffness: 460, damping: 34 }}
-                        className="absolute inset-0 rounded-full bg-[var(--color-surface)] border border-[var(--color-border)] shadow-xs"
-                        aria-hidden="true"
-                      />
-                    )}
-                    <span className="relative z-10">{dir.label}</span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="flex flex-wrap items-center gap-1.5 rounded-full border border-[var(--color-border)] bg-[var(--color-surface-board)] px-2.5 py-1">
-              {[60, 80, 100, 120].map((presetBpm) => (
-                <button
-                  key={presetBpm}
-                  type="button"
-                  onClick={() => handleChangeBpm(presetBpm)}
-                  className={`rounded-full px-2 py-0.5 font-mono text-[11px] cursor-pointer transition-colors ${
-                    bpm === presetBpm
-                      ? 'bg-[var(--color-ink)] text-white'
-                      : 'text-[var(--color-ink-secondary)] hover:text-[var(--color-ink)]'
-                  }`}
-                >
-                  {presetBpm}
-                </button>
-              ))}
-              <input
-                id="scale-bpm-slider"
-                type="range"
-                min={45}
-                max={150}
-                step={1}
-                value={bpm}
-                onChange={(e) => handleChangeBpm(Number(e.target.value))}
-                aria-label="Tempo de escala en BPM"
-                className="studio-slider w-[220px] max-w-[54vw] ml-1"
-              />
-              <div className="flex items-center gap-1 pl-1.5 border-l border-[var(--color-border)]">
-                <input
-                  id="scale-bpm-number-input"
-                  type="number"
-                  min={45}
-                  max={150}
-                  value={bpm}
-                  aria-label="Escribir BPM de escala"
-                  onChange={(e) => {
-                    const parsed = Number(e.target.value);
-                    if (Number.isFinite(parsed) && parsed > 0) {
-                      handleChangeBpm(parsed);
-                    }
-                  }}
-                  className="w-10 bg-transparent text-center font-mono text-xs font-medium text-[var(--color-ink)] num-tabular focus:outline-none"
-                />
-                <span className="font-mono text-[11px] text-[var(--color-ink-muted)]">BPM</span>
-              </div>
-            </div>
-
-            <div
-              className="inline-flex rounded-full bg-[var(--color-surface-subtle)] p-1"
-              role="group"
-              aria-label="Subdivisión rítmica"
-            >
-              {(
-                [
-                  { id: 'quarter', label: 'Negras' },
-                  { id: 'eighth', label: 'Corcheas' },
-                ] as const
-              ).map((sub) => (
-                <button
-                  key={sub.id}
-                  type="button"
-                  onClick={() => handleChangeSubdivision(sub.id)}
-                  className={`px-2.5 py-1 rounded-full text-xs font-medium cursor-pointer transition-colors ${
-                    subdivision === sub.id
-                      ? 'bg-[var(--color-surface)] text-[var(--color-ink)] border border-[var(--color-border)]'
-                      : 'text-[var(--color-ink-secondary)] hover:text-[var(--color-ink)]'
-                  }`}
-                >
-                  {sub.label}
-                </button>
-              ))}
-            </div>
-
-            <button
-              type="button"
-              aria-pressed={metronomeEnabled}
-              onClick={() => setMetronomeEnabled((v) => !v)}
-              className={`rounded-full border px-3 py-1.5 text-xs font-medium inline-flex items-center gap-1.5 cursor-pointer transition-colors ${
-                metronomeEnabled
-                  ? 'border-[var(--color-ink)] bg-[var(--color-ink)] text-white'
-                  : 'border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-ink)] hover:border-[var(--color-ink-muted)]'
-              }`}
-            >
-              <Timer className="w-3.5 h-3.5" />
-              <span>Metrónomo</span>
             </button>
           </div>
         </div>

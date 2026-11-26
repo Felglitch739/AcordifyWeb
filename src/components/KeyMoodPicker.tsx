@@ -12,6 +12,7 @@ import {
 
 interface KeyMoodPickerProps {
   progression: GeneratedProgression;
+  children: React.ReactNode;
   guitarTone: GuitarTone;
   strumPattern: StrumPatternId;
   onSelectMode: (mode: Mode) => void;
@@ -24,6 +25,7 @@ interface KeyMoodPickerProps {
 
 export const KeyMoodPicker: React.FC<KeyMoodPickerProps> = ({
   progression,
+  children,
   guitarTone,
   strumPattern,
   onSelectMode,
@@ -34,19 +36,13 @@ export const KeyMoodPicker: React.FC<KeyMoodPickerProps> = ({
   onChangeStrumPattern,
 }) => {
   const keyOptions = getKeyOptions(progression.mode);
-  const selectedMoodObj =
-    MOOD_OPTIONS.find((m) => m.id === progression.mood) ?? MOOD_OPTIONS[0];
   const romanSequence = progression.slots.map((s) => s.chord.roman).join('–');
 
   return (
-    <section aria-label="Tono, ánimo y guitarra" className="space-y-6">
+    <section aria-label="Tono, ánimo y guitarra" className="space-y-4">
       {/* Open Editorial Header on #F4F4F5 Canvas */}
-      <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
+      <div className="studio-heading flex flex-wrap items-end justify-between gap-3">
         <div className="space-y-2">
-          <p className="font-mono text-xs uppercase tracking-[0.14em] text-[var(--color-ink-muted)]">
-            {selectedMoodObj.label} · {selectedMoodObj.description}
-          </p>
-
           <h1 className="text-[34px] sm:text-[44px] font-medium tracking-[-0.03em] leading-[1.08] text-[var(--color-ink)]">
             {progression.keyRoot}{' '}
             {progression.mode === 'major' ? 'Mayor' : 'Menor'}{' '}
@@ -75,7 +71,9 @@ export const KeyMoodPicker: React.FC<KeyMoodPickerProps> = ({
         </button>
       </div>
 
-      {/* Monochrome Flat Control Card */}
+      {children}
+
+      <h2 className="studio-settings-heading">Tono y ejecución</h2>
       <div className="surface-card p-4 sm:p-5 space-y-4">
         {/* Row 1: Mayor / Menor + 12 Chromatic Keys */}
         <div className="flex flex-col lg:flex-row lg:items-center gap-3">

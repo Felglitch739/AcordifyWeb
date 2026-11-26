@@ -1,34 +1,36 @@
 /* ─────────────────────────────────────────────────────────────────────────────
-   Acordify v2 — Single Source of Truth Design Tokens
-   Monochrome Editorial Base + Single Terracotta Active Accent
+   Acordify — Single Source of Truth Design Tokens
+   Ink, mist and one signal color
    ────────────────────────────────────────────────────────────────────────── */
 
 :root {
   /* Palette */
-  --color-bg: #F6F2EB;
-  --color-surface: #FFFCF7;
-  --color-surface-subtle: #EFE9DF;
-  --color-surface-board: #F6F1E9;
-  --color-ink: #211B17;
-  --color-ink-secondary: #594D42;
-  --color-ink-muted: #6C6055;
-  --color-border: #DED5C9;
-  --color-border-strong: #211B17;
+  --color-bg: #EDF0F5;
+  --color-surface: #FFFFFF;
+  --color-surface-subtle: #E5EAF0;
+  --color-surface-board: #F0F3F8;
+  --color-ink: #151925;
+  --color-ink-secondary: #424C60;
+  --color-ink-muted: #526076;
+  --color-border: #C9D2E0;
+  --color-border-strong: #151925;
 
   /* Single Semantic Active Accent */
-  --color-accent: #A64229;
-  --color-accent-tint: rgba(166, 66, 41, 0.08);
-  --color-accent-border: rgba(166, 66, 41, 0.42);
-  --color-accent-ink: #FFFCF7;
+  --color-accent: #3D581D;
+  --color-accent-tint: rgba(61, 88, 29, 0.08);
+  --color-accent-border: rgba(61, 88, 29, 0.42);
+  --color-accent-ink: #FFFFFF;
+  --color-signal: #e6ff58;
 
   /* Tuner Lock & Overlay Backdrop */
   --color-ok: #15803D;
   --color-backdrop: rgba(17, 17, 17, 0.42);
 
   /* Typography */
-  --font-sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  --font-sans: 'Instrument Sans', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
   --font-mono: 'JetBrains Mono', ui-monospace, monospace;
-  --font-editorial: 'Instrument Serif', Georgia, serif;
+  --font-display: 'Space Grotesk', 'Instrument Sans', system-ui, sans-serif;
+  --font-editorial: 'Space Grotesk', sans-serif;
 
   /* Radii & Spacing */
   --radius-card: 16px;
